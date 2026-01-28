@@ -19,9 +19,13 @@ COPY schema.sql .
 # Copy the rest of the application code into the container
 COPY . .
 
+# Create necessary directories
+RUN mkdir -p /app/instance /app/profile_pictures_storage /app/thumbnails /app/user_media /app/user_uploads
+
 # Expose port 5000 for the Flask application
 EXPOSE 5000
 
 # Define the command to run the Flask application
 # This is typically overridden by the 'command' in docker-compose.yml
-# CMD ["flask", "run", "--host=0.0.0.0"]
+# # Use gunicorn for production
+# CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "--threads", "2", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-", "app:app"]
