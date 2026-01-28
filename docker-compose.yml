@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  web:
+    image: locqust/nebulae:latest  # Or your Docker Hub username
+    container_name: nebulae
+    ports:
+      - "5000:5000"
+    volumes:
+      # Persistent database storage
+      - nebulae_data:/app/instance
+      # Optional: Backup location (users can customize)
+      - ./backups:/app/instance/backups
+      # Profile pictures storage
+      - profile_pictures:/app/profile_pictures_storage
+      # Thumbnail cache
+      - thumbnail_cache:/app/thumbnails
+      # User media volumes - USERS MUST CONFIGURE THESE - one each per user
+      # Example format (commented out by default):
+      # - /path/to/user/photos:/app/user_media/username_media:ro
+      # - C:\Users\User\Photos:/app/user_media/username_media:ro
+      # - /path/to/user/uploads:/app/user_uploads/username_uploads
+      # - C:\Users\User\Documents\Uploads:/app/user_uploads/username_uploads
+
+    environment:
+      # REQUIRED: Generate with: python -c "import secrets; print(secrets.token_hex(32))"
+      - SECRET_KEY=CHANGE_ME_GENERATE_A_SECRET_KEY
+      # REQUIRED: Your public hostname/IP (e.g., nebulae.example.com)
+      - NODE_HOSTNAME=CHANGE_ME_TO_YOUR_HOSTNAME
+      # Optional: Set to True only for testing without HTTPS
+      - FEDERATION_INSECURE_MODE=False
+      # Optional: Set to production
+      - FLASK_ENV=production
+    restart: unless-stopped
+    command: gunicorn --bind 0.0.0.0:5000 --workers 4 --threads 2 --timeout 120 --access-logfile - --error-logfile - "app:app"
+
+volumes:
+  nebulae_data:
+  profile_pictures:
+  thumbnail_cache:
