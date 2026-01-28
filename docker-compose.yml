@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   web:
-    image: locqust/nebulae:latest  # Or your Docker Hub username
+    image: ghcr.io/locqust/nebulae:latest 
     container_name: nebulae
     ports:
       - "5000:5000"
