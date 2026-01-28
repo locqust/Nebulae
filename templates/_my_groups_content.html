@@ -1,0 +1,196 @@
+<!-- This file replaces the old my_groups.html. It only contains the main content. -->
+<!-- Flash Messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <div class="mb-4">
+            {% for category, message in messages %}
+                <div class="flash-message flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
+
+<!-- Wrapped content in a card for layout consistency -->
+<div>
+
+    <h1 class="text-3xl font-bold primary-text mb-6">My Groups</h1>
+
+    <!-- NEW: Search Bar -->
+    <div class="mb-8">
+        <input type="search" id="myGroupsSearchInput" placeholder="Search your groups..." class="w-full px-4 py-3 border rounded-lg form-input" aria-label="Search my groups">
+    </div>
+    <!-- END NEW: Search Bar -->
+
+    <!-- This message shows only when a search yields no results -->
+    <p id="no-search-results-message" class="text-center secondary-text py-4" style="display: none;"></p>
+
+    <div class="mb-8">
+        <h2 class="text-2xl font-bold primary-text mb-4">Groups You're In</h2>
+        {% if groups %}
+            <ul class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4" id="groups-list">
+                {% for group in groups %}
+                    {% set search_text = (group.name or '') | lower %}
+                    <li class="flex items-center justify-between p-4 rounded-lg shadow-sm border post-card group-item" data-search-text="{{ search_text }}">
+                        <div class="flex items-center">
+                            <div class="w-12 h-12 rounded-full overflow-hidden mr-4 border border-gray-300 dark:border-gray-600">
+                                {% if group.profile_picture_path %}
+                                    {% if group.hostname %}
+                                        {% set insecure_mode = config.get('FEDERATION_INSECURE_MODE', False) %}
+                                        {% set protocol = 'http' if insecure_mode else 'https' %}
+                                        <img src="{{ protocol }}://{{ group.hostname }}/profile_pictures/{{ group.profile_picture_path }}" alt="Group Profile Picture" class="w-full h-full object-cover">
+                                    {% else %}
+                                        <img src="{{ url_for('main.serve_profile_picture', filename=group.profile_picture_path) }}" alt="Group Profile Picture" class="w-full h-full object-cover">
+                                    {% endif %}
+                                {% else %}
+                                    <svg class="w-full h-full text-gray-500" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12ZM12 14C9.33 14 4 15.34 4 18V20H20V18C20 15.34 14.67 14 12 14Z"/>
+                                    </svg>
+                                {% endif %}
+                            </div>
+                            <div>
+                                <a href="{{ federated_group_profile_url(group) }}" class="name-link text-lg">
+                                    {{ group.name }}
+                                </a>
+                                <div class="flex items-center space-x-2">
+                                    <p class="text-sm secondary-text">Joined: <span class="utc-timestamp" data-timestamp="{{ group.joined_at }}">{{ group.joined_at | format_timestamp }}</span></p>
+                                    {% if group.role == 'admin' %}
+                                        <span class="text-xs bg-indigo-200 text-indigo-800 px-2 py-1 rounded-full">Admin</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="relative inline-block text-left">
+                            <button type="button" class="inline-flex justify-center w-full rounded-md px-3 py-2 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 focus:outline-none" onclick="toggleDropdown(event, 'group-options-{{ group.puid }}')">
+                                Actions
+                                <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                            <div class="dropdown-menu" id="group-options-{{ group.puid }}">
+                                <div class="py-1">
+                                    <a href="{{ federated_group_profile_url(group) }}" class="block w-full text-left px-4 py-2 text-sm">View Group</a>
+                                    <form action="{{ url_for('groups.leave_group_route', puid=group.puid) }}" method="POST" onsubmit="event.preventDefault();">
+                                        <button type="button" onclick="confirmFormSubmission(this.closest('form'), 'Are you sure you want to leave the group: {{ group.name | js_string }}?');" class="text-red-600 block w-full text-left px-4 py-2 text-sm">
+                                            Leave Group
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-center secondary-text" id="no-groups-message">You haven't joined any groups yet.</p>
+        {% endif %}
+    </div>
+
+    <div class="mb-8">
+        <h2 class="text-2xl font-bold primary-text mb-4">Pending Join Requests</h2>
+        {% if pending_requests %}
+            <ul class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4" id="pending-requests-list">
+                {% for request in pending_requests %}
+                    {% set search_text = (request.group_name or '') | lower %}
+                    <a href="{{ federated_group_profile_url({'puid': request.group_puid, 'node_hostname': request.node_hostname}) }}" class="block hover:bg-interactive rounded-lg pending-item" data-search-text="{{ search_text }}">
+                        <li class="flex items-center justify-between p-4 rounded-lg shadow-sm border post-card">
+                           <div class="flex items-center">
+                                <div class="w-12 h-12 rounded-full overflow-hidden mr-4 border border-gray-300 dark:border-gray-600">
+                                    {% if request.group_profile_picture_path %}
+                                        {% if request.node_hostname %}
+                                            {% set insecure_mode = config.get('FEDERATION_INSECURE_MODE', False) %}
+                                            {% set protocol = 'http' if insecure_mode else 'https' %}
+                                            <img src="{{ protocol }}://{{ request.node_hostname }}/profile_pictures/{{ request.group_profile_picture_path }}" alt="Group Profile Picture" class="w-full h-full object-cover">
+                                        {% else %}
+                                            <img src="{{ url_for('main.serve_profile_picture', filename=request.group_profile_picture_path) }}" alt="Group Profile Picture" class="w-full h-full object-cover">
+                                        {% endif %}
+                                    {% else %}
+                                         <svg class="w-full h-full text-gray-500" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12ZM12 14C9.33 14 4 15.34 4 18V20H20V18C20 15.34 14.67 14 12 14Z"/>
+                                        </svg>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <span class="font-semibold primary-text text-lg">Request sent to join {{ request.group_name }}</span>
+                                    {% if request.node_hostname %}
+                                        <p class="text-sm secondary-text">on node: {{ request.node_hostname }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </li>
+                    </a>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-center secondary-text" id="no-pending-message">You have no pending join requests.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- This script is now loaded via script.js, but the function needs to be available -->
+<script>
+    // Make this function available globally so it can be called
+    // when the new content is injected into the page.
+    function filterMyGroups() {
+        const searchInput = document.getElementById('myGroupsSearchInput');
+        if (!searchInput) return; // Guard against running when not on friends page
+        const searchTerm = searchInput.value.trim().toLowerCase();
+
+        const groupsList = document.getElementById('groups-list');
+        const pendingList = document.getElementById('pending-requests-list');
+        const noGroupsMessage = document.getElementById('no-groups-message');
+        const noPendingMessage = document.getElementById('no-pending-message');
+        const noSearchResultsMessage = document.getElementById('no-search-results-message');
+
+        let visibleGroups = 0;
+        let visiblePending = 0;
+
+        // Filter "Groups You're In"
+        if (groupsList) {
+            // Use .group-item to select the list items
+            const groups = groupsList.querySelectorAll('.group-item');
+            groups.forEach(item => {
+                const searchText = item.dataset.searchText || '';
+                if (!searchTerm || searchText.includes(searchTerm)) {
+                    item.style.display = 'flex';
+                    visibleGroups++;
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        // Filter "Pending Join Requests"
+        if (pendingList) {
+            // Use .pending-item to select the <a> tags
+            const requests = pendingList.querySelectorAll('.pending-item');
+            requests.forEach(item => {
+                const searchText = item.dataset.searchText || '';
+                if (!searchTerm || searchText.includes(searchTerm)) {
+                    item.style.display = 'block'; // 'block' because it's an <a> tag
+                    visiblePending++;
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        // --- Toggle "No results" messages ---
+
+        if (noGroupsMessage) {
+            noGroupsMessage.style.display = (visibleGroups === 0 && searchTerm === '') ? 'block' : 'none';
+        }
+
+        if (noPendingMessage) {
+            noPendingMessage.style.display = (visiblePending === 0 && searchTerm === '') ? 'block' : 'none';
+        }
+
+        if (noSearchResultsMessage) {
+            if (visibleGroups === 0 && visiblePending === 0 && searchTerm !== '') {
+                noSearchResultsMessage.textContent = `No groups found matching "${searchTerm}".`;
+                noSearchResultsMessage.style.display = 'block';
+            } else {
+                noSearchResultsMessage.style.display = 'none';
+            }
+        }
+    }
+</script>

@@ -1,0 +1,237 @@
+{# templates/_create_post_form.html #}
+{#
+This partial template renders a form for creating a new post.
+It now intelligently adapts based on whether 'group' or 'profile_user' is provided.
+- profile_puid: The PUID of the profile where the post will appear.
+- group: The group object if posting to a group.
+- event: The event object if posting to an event.
+- profile_user: The full user/page object of the profile being viewed.
+- is_federated_viewer: (boolean) True if the viewer is from a remote node.
+- viewer_home_url: The base URL of the viewer's home node.
+- viewer_puid_for_js: The PUID of the logged-in viewer.
+#}
+
+{% set is_group_post = True if group else False %}
+{% set is_event_post = True if event else False %}
+{% set is_public_page = True if profile_user and profile_user.user_type == 'public_page' else False %}
+
+{# Determine form action based on context #}
+{% if is_group_post %}
+    {% set form_action = url_for('groups.create_group_post', puid=group.puid) %}
+    {% set form_title = "Post to " ~ group.name %}
+{% elif is_event_post %}
+    {% set form_action = url_for('events.create_event_post_route', event_puid=event.puid) %}
+    {% set form_title = "Post on Event Wall" %}
+{% elif is_federated_viewer %}
+    {% set form_action = url_for('federation.create_remote_post') %}
+    {% set form_title = "Create a New Post" %}
+{% else %}
+    {% set form_action = url_for('main.create_post') %}
+    {% set form_title = "Create a New Post" %}
+{% endif %}
+
+
+{# Get the current viewer's data - same logic as in _header.html #}
+{% if is_owner %}
+    {% set top_bar_user = profile_user %}
+{% else %}
+    {% if not is_federated_viewer %}
+        {% set top_bar_user = get_user_by_username(session['username']) %}
+    {% else %}
+        {% set top_bar_user = current_viewer_data %}
+    {% endif %}
+{% endif %}
+
+
+<div class="post-card p-6 rounded-lg shadow-md mb-6">
+    <form action="{{ form_action }}" method="POST" enctype="multipart/form-data">
+        {% if is_event_post %}
+            <input type="hidden" name="event_puid" value="{{ event.puid }}">
+        {% elif not is_group_post %}
+            <input type="hidden" name="profile_puid" value="{{ profile_puid }}">
+        {% endif %}
+        
+        {# Profile picture and textarea container #}
+        <div class="flex items-start space-x-3 mb-6">
+            {# Profile Picture - using same logic as _header.html #}
+            <div class="w-12 h-12 rounded-full overflow-hidden border border-gray-300 dark:border-gray-600 flex-shrink-0">
+                {% if top_bar_user and top_bar_user.profile_picture_path %}
+                    {# Logic to correctly source the profile picture #}
+                    {% if top_bar_user.hostname %}
+                        {% set insecure_mode = config.get('FEDERATION_INSECURE_MODE', False) %}
+                        {% set protocol = 'http' if insecure_mode else 'https' %}
+                        {% set top_bar_pic_url = protocol ~ '://' ~ top_bar_user.hostname ~ '/profile_pictures/' ~ top_bar_user.profile_picture_path %}
+                    {% else %}
+                        {% set top_bar_pic_url = url_for('main.serve_profile_picture', filename=top_bar_user.profile_picture_path) %}
+                    {% endif %}
+                    <img src="{{ top_bar_pic_url }}" alt="Your Profile" class="w-full h-full object-cover" onerror="this.src='{{ url_for('static', filename='images/default_avatar.png') }}';">
+                {% else %}
+                    <svg class="w-full h-full text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                    </svg>
+                {% endif %}
+            </div>
+            
+            {# Textarea #}
+            <div class="flex-grow">
+                <textarea id="content" name="content" rows="2"
+                          class="block w-full px-4 py-2 border rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm form-input"
+                          placeholder="What's on your mind?"></textarea>
+            </div>
+        </div>
+        
+        {# NEW: Tagged Users Section #}
+        <div id="tagged-users-section" class="mb-4" style="display: none;">
+            <div class="flex items-center gap-2 flex-wrap px-3">
+                <svg class="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                </svg>
+                <span class="text-sm secondary-text">with</span>
+                <div id="tagged-users-list" class="flex gap-2 flex-wrap"></div>
+            </div>
+        </div>
+        
+        {# NEW: Location Section #}
+        <div id="location-section" class="mb-4" style="display: none;">
+            <div class="flex items-center gap-2 px-3">
+                <svg class="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                <span class="text-sm secondary-text">at</span>
+                <span id="location-display" class="text-sm font-medium primary-text"></span>
+                <button type="button" onclick="removeLocation()" class="text-red-500 hover:text-red-700 ml-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        
+        {# Hidden inputs for tagged users and location #}
+        <input type="hidden" name="tagged_users" id="tagged-users-input" value="[]">
+        <input type="hidden" name="location" id="location-input" value="">
+        <input type="hidden" name="poll_data" id="poll-data-input" value="">
+
+        <div class="border-t pt-6 comment-section">
+			<div class="mb-4 flex gap-2 flex-wrap">
+				<label for="create-post-media-upload" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out cursor-pointer inline-flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
+                    </svg>
+                    <span class="hidden sm:inline">Upload Media</span>
+                </label>
+					<input type="file" id="create-post-media-upload" accept="image/*,video/*" multiple class="hidden" onchange="handleCreatePostMediaUpload(event)">
+					
+				{% if is_federated_viewer %}
+					<button type="button" onclick="openCreatePostMediaBrowser(true, '{{ viewer_home_url }}')" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out inline-flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-4 4 4 4-4V5h-2v4l-2-2-4 4-2-2-2 2z" clip-rule="evenodd"></path>
+                        </svg>
+                        <span class="hidden sm:inline">Browse Media</span>
+					</button>
+				{% elif user_media_path %}
+					<button type="button" onclick="openCreatePostMediaBrowser(false, '')" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out inline-flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-4 4 4 4-4V5h-2v4l-2-2-4 4-2-2-2 2z" clip-rule="evenodd"></path>
+                        </svg>
+                        <span class="hidden sm:inline">Browse Media</span>
+					</button>
+				{% endif %}
+                
+                {# NEW: Tag Friends Button #}
+                <button type="button" onclick="openTagFriendsModal()" 
+                        class="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out inline-flex items-center gap-2"
+                        title="Tag friends">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z"></path>
+                    </svg>
+                    <span class="hidden sm:inline">Tag Friends</span>
+                </button>
+                
+                {# NEW: Add Location Button #}
+                <button type="button" onclick="openLocationModal()" 
+                        class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out inline-flex items-center gap-2"
+                        title="Add location">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    <span class="hidden sm:inline">Add Location</span>
+                </button>
+
+                <button type="button" onclick="openPollModal()" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out inline-flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                    <span class="hidden sm:inline">Add Poll</span>
+                </button>
+			</div>
+            
+            <div id="media-preview" class="flex flex-wrap gap-4 mt-4">
+                <!-- Selected media previews will be displayed here -->
+            </div>
+            <input type="hidden" name="selected_media_files" id="selected_media_files" value="[]">
+			<input type="hidden" name="uploaded_media_files" id="uploaded_media_files" value="[]">
+        </div>
+
+        <div class="mb-6 flex flex-col sm:flex-row sm:items-end gap-4">
+            <div class="flex-grow sm:flex-grow-0">
+                <label for="privacy_setting" class="block text-sm font-medium mb-1 secondary-text">Privacy Setting</label>
+                <select id="privacy_setting" name="privacy_setting"
+                        class="mt-1 block w-full sm:w-48 px-4 py-2 border rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                    {% if is_event_post %}
+                        <option value="event" selected>Event Invitees</option>
+                    {% elif is_group_post %}
+                        <option value="group" selected>Group</option>
+                        {% if not current_user_requires_parental_approval %}
+                            <option value="public">Public</option>
+                        {% endif %}
+                    {% elif is_public_page %}
+                        <option value="followers">Followers</option>
+                        {% if not current_user_requires_parental_approval %}
+                            <option value="public">Public</option>
+                        {% endif %}
+                    {% else %}
+                        {% if not is_federated_viewer %}
+                            <option value="local">Local Only</option>
+                        {% endif %}
+                        {% if not current_user_requires_parental_approval and not profile_user_requires_parental_approval %}
+                            <option value="public">Public</option>
+                        {% endif %}
+                        <option value="friends">Friends Only</option>
+                    {% endif %}
+                </select>
+            </div>
+            
+            <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition duration-200 inline-flex items-center gap-2 whitespace-nowrap self-start sm:self-auto sm:mb-0.5">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clip-rule="evenodd"></path>
+                </svg>
+                Create Post
+            </button>
+        </div>
+
+        {# Poll Display #}
+        <div id="poll-display-section" class="mb-4 hidden">
+            <div class="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
+                <div class="flex items-center justify-between mb-3">
+                    <h4 class="font-semibold primary-text">Poll</h4>
+                    <button type="button" 
+                            onclick="removePollFromPost()"
+                            class="text-gray-400 hover:text-red-500">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div id="poll-display-options" class="space-y-2 mb-3">
+                    {# Options will be inserted here by JavaScript #}
+                </div>
+                <div id="poll-display-settings" class="text-sm secondary-text space-y-1">
+                    {# Settings will be shown here #}
+                </div>
+            </div>
+        </div>
+    </form>
+</div>

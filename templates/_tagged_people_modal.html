@@ -1,0 +1,25 @@
+{# templates/_tagged_people_modal.html #}
+{# Modal to show all tagged people when "X others" is clicked #}
+
+<div id="tagged-people-modal" class="modal hidden">
+    <div class="modal-content max-w-md">
+        <span class="close-button" onclick="closeModal('tagged-people-modal')">&times;</span>
+        <h3 class="text-lg font-semibold primary-text mb-4">People</h3>
+        
+        <!-- Modal Body -->
+        <div id="tagged-people-list" class="max-h-96 overflow-y-auto mb-4">
+            <!-- Tagged people will be inserted here by JavaScript -->
+            <div class="text-center secondary-text py-8">
+                <p>Loading...</p>
+            </div>
+        </div>
+        
+        <!-- Modal Footer -->
+        <div class="flex items-center justify-end">
+            <button type="button" onclick="closeModal('tagged-people-modal')" 
+                    class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+                Close
+            </button>
+        </div>
+    </div>
+</div>

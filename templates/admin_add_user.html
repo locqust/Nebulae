@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#3b82f6" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#1e3a8a" media="(prefers-color-scheme: dark)">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Nebulae">
+    
+    <!-- PWA Icons -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192x192.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192x192.png') }}">
+    <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='icons/icon-512x512.png') }}">
+    <title>Add User - Admin</title>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+
+    <!-- Preload critical CSS -->
+    <link rel="preload" href="{{ url_for('static', filename='css/style.css') }}" as="style">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="flex flex-col min-h-screen items-center justify-center py-8 px-4 bg-cover bg-center bg-no-repeat bg-fixed backdrop-blur-sm" style="background-image: url('{{ url_for('static', filename='images/branding/background_1920x1080.png') }}');">
+    <!-- Dark overlay for better readability -->
+    <div class="fixed inset-0 bg-black/30 -z-10"></div>
+    <div class="max-w-md w-full bg-white p-8 rounded-lg shadow-xl border border-gray-200">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Add New User</h1>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="mb-4">
+                    {% for category, message in messages %}
+                        <div class="flash-message flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <form action="{{ url_for('admin.admin_add_user') }}" method="POST" class="space-y-6">
+            <div>
+                <label for="username" class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                <input type="text" id="username" name="username" required
+                       class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                       placeholder="Enter new username">
+            </div>
+            <div>
+                <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <input type="password" id="password" name="password" required
+                       class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                       placeholder="Enter new password">
+                <p class="mt-1 text-xs text-gray-600">
+                    Password must contain:<br>
+                    • At least 12 characters<br>
+                    • At least one uppercase letter (A-Z)<br>
+                    • At least one lowercase letter (a-z)<br>
+                    • At least one number (0-9)<br>
+                    • At least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)
+                </p>
+            </div>
+            <div>
+                <label for="display_name" class="block text-sm font-medium text-gray-700 mb-1">Display Name (Optional)</label>
+                <input type="text" id="display_name" name="display_name"
+                       class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                       placeholder="Enter display name (defaults to username)">
+            </div>
+            <div>
+                <label for="date_of_birth" class="block text-sm font-medium text-gray-700 mb-1">Date of Birth <span class="text-red-500">*</span></label>
+                <input type="date" id="date_of_birth" name="date_of_birth" required max="{{ today }}"
+                       class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                <p class="mt-1 text-xs text-gray-600">
+                    Date of birth cannot be changed after account creation. Users can control visibility in their profile settings.
+                </p>
+            </div>
+            
+            <div id="parentSelectionSection" style="display: none;">
+                <label for="parent_user_id" class="block text-sm font-medium text-gray-700 mb-1">Assign Parent/Guardian <span class="text-red-500">*</span></label>
+                <select id="parent_user_id" name="parent_user_id"
+                        class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                    <option value="">Select a parent/guardian...</option>
+                    {% for user in potential_parents %}
+                        <option value="{{ user.id }}">{{ user.display_name }} ({{ user.username }})</option>
+                    {% endfor %}
+                </select>
+                <p class="mt-1 text-xs text-gray-600">
+                    Users under 16 require parental oversight. Remote interactions will require parent approval.
+                </p>
+            </div>
+            <button type="submit"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition duration-300 ease-in-out">
+                Add User
+            </button>
+            <a href="{{ url_for('admin.admin_manage_users') }}"
+               class="w-full bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition duration-300 ease-in-out text-center block">
+                Cancel
+            </a>
+        </form>
+    </div>
+
+    <script>
+        // Calculate age and show parent selection if under 16
+        document.getElementById('date_of_birth').addEventListener('change', function() {
+            const dob = new Date(this.value);
+            const today = new Date();
+            let age = today.getFullYear() - dob.getFullYear();
+            const monthDiff = today.getMonth() - dob.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+                age--;
+            }
+            
+            const parentSection = document.getElementById('parentSelectionSection');
+            const parentSelect = document.getElementById('parent_user_id');
+            
+            if (age < 16) {
+                parentSection.style.display = 'block';
+                parentSelect.required = true;
+            } else {
+                parentSection.style.display = 'none';
+                parentSelect.required = false;
+                parentSelect.value = '';
+            }
+        });
+        
+        // Set max date to today
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('date_of_birth').setAttribute('max', today);
+    </script>
+</body>
+</html>

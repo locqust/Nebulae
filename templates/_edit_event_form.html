@@ -1,0 +1,41 @@
+<form id="editEventForm" class="space-y-4" onsubmit="event.preventDefault(); App.Events.submitEditForm();">
+    <h2 class="text-xl font-bold primary-text mb-4">Edit Event</h2>
+    <input type="hidden" id="edit_event_puid" value="{{ event.puid }}">
+    <div>
+        <label for="edit_event_title" class="block text-sm font-medium secondary-text">Title</label>
+        <input type="text" id="edit_event_title" value="{{ event.title }}" class="mt-1 block w-full rounded-md shadow-sm form-input">
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+        <div>
+            <label for="edit_event_date" class="block text-sm font-medium secondary-text">Start Date</label>
+            <input type="date" id="edit_event_date" value="{{ event.event_datetime.strftime('%Y-%m-%d') if event.event_datetime else '' }}" class="mt-1 block w-full rounded-md shadow-sm form-input">
+        </div>
+        <div>
+            <label for="edit_event_time" class="block text-sm font-medium secondary-text">Start Time</label>
+            <input type="time" id="edit_event_time" value="{{ event.event_datetime.strftime('%H:%M') if event.event_datetime else '' }}" class="mt-1 block w-full rounded-md shadow-sm form-input">
+        </div>
+    </div>
+    <!-- NEW: End date and time for edit form -->
+    <div class="grid grid-cols-2 gap-4">
+        <div>
+            <label for="edit_event_end_date" class="block text-sm font-medium secondary-text">End Date (Optional)</label>
+            <input type="date" id="edit_event_end_date" value="{{ event.event_end_datetime.strftime('%Y-%m-%d') if event.event_end_datetime else '' }}" class="mt-1 block w-full rounded-md shadow-sm form-input">
+        </div>
+        <div>
+            <label for="edit_event_end_time" class="block text-sm font-medium secondary-text">End Time</label>
+            <input type="time" id="edit_event_end_time" value="{{ event.event_end_datetime.strftime('%H:%M') if event.event_end_datetime else '' }}" class="mt-1 block w-full rounded-md shadow-sm form-input">
+        </div>
+    </div>
+    <div>
+        <label for="edit_event_location" class="block text-sm font-medium secondary-text">Location</label>
+        <input type="text" id="edit_event_location" value="{{ event.location }}" class="mt-1 block w-full rounded-md shadow-sm form-input">
+    </div>
+    <div>
+        <label for="edit_event_details" class="block text-sm font-medium secondary-text">Details</label>
+        <textarea id="edit_event_details" rows="4" class="mt-1 block w-full rounded-md shadow-sm form-input">{{ event.details }}</textarea>
+    </div>
+    <div class="flex justify-end gap-4 pt-4">
+        <button type="button" onclick="App.Modal.close('editEventModal')" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg">Cancel</button>
+        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg">Save Changes</button>
+    </div>
+</form>

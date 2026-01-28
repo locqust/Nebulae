@@ -1,0 +1,389 @@
+<!-- This file replaces the old parental_dashboard.html main content. It only contains the main content area. -->
+
+<!-- Flash Messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <div class="mb-4">
+            {% for category, message in messages %}
+                <div class="flash-message flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
+
+<!-- Page Header -->
+<div class="post-card p-6 rounded-lg shadow-sm">
+    <h1 class="text-3xl font-bold primary-text mb-2">Parental Controls</h1>
+    <p class="secondary-text">Manage approval requests from children under your supervision</p>
+</div>
+
+<!-- Summary Stats -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="post-card p-6 rounded-lg shadow-sm text-center">
+        <div class="text-4xl font-bold text-blue-600 dark:text-blue-400 mb-2">{{ children|length }}</div>
+        <div class="text-sm secondary-text">Children Supervised</div>
+    </div>
+    <div class="post-card p-6 rounded-lg shadow-sm text-center">
+        <div class="text-4xl font-bold text-orange-600 dark:text-orange-400 mb-2">{{ approvals|length }}</div>
+        <div class="text-sm secondary-text">Pending Approvals</div>
+    </div>
+    <div class="post-card p-6 rounded-lg shadow-sm text-center">
+        <div class="text-4xl font-bold text-green-600 dark:text-green-400 mb-2">Active</div>
+        <div class="text-sm secondary-text">Control Status</div>
+    </div>
+</div>
+
+<!-- Children List -->
+{% if children %}
+    {% for child in children %}
+    <div class="post-card p-6 rounded-lg shadow-sm">
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-4">
+                <div class="w-16 h-16 rounded-full overflow-hidden flex-shrink-0 border-2 border-gray-200">
+                    {% if child.profile_picture_path %}
+                        <img src="{{ url_for('main.serve_profile_picture', filename=child.profile_picture_path) }}" 
+                             alt="{{ child.display_name }}" 
+                             class="w-full h-full object-cover">
+                    {% else %}
+                        <svg class="w-full h-full text-gray-500 p-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                        </svg>
+                    {% endif %}
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold primary-text">{{ child.display_name or child.username }}</h3>
+                    <p class="text-sm secondary-text">@{{ child.username }}</p>
+                </div>
+            </div>
+            {% if child.pending_count > 0 %}
+            <span class="bg-orange-500 text-white text-sm font-bold px-3 py-1 rounded-full">
+                {{ child.pending_count }} pending
+            </span>
+            {% else %}
+            <span class="bg-green-500 text-white text-sm font-bold px-3 py-1 rounded-full">
+                All clear
+            </span>
+            {% endif %}
+        </div>
+        
+        <div class="flex gap-2">
+            <a href="{{ url_for('main.user_profile', puid=child.puid) }}" 
+               class="text-sm bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg inline-flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                </svg>
+                View Profile
+            </a>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="post-card p-6 rounded-lg shadow-sm text-center">
+        <p class="secondary-text">No children are currently under your supervision.</p>
+    </div>
+{% endif %}
+
+<!-- Pending Approvals -->
+{% if approvals %}
+<div class="post-card p-6 rounded-lg shadow-sm">
+    <h2 class="text-2xl font-bold primary-text mb-4">Pending Approval Requests</h2>
+    
+    <div class="space-y-4">
+        {% for approval in approvals %}
+        <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+            <div class="flex items-start justify-between mb-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
+                        {% if approval.child_profile_picture %}
+                            <img src="{{ url_for('main.serve_profile_picture', filename=approval.child_profile_picture) }}" 
+                                 alt="{{ approval.child_display_name }}" 
+                                 class="w-full h-full object-cover">
+                        {% else %}
+                            <svg class="w-full h-full text-gray-500 p-2" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                            </svg>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <p class="font-semibold primary-text">{{ approval.child_display_name or approval.child_username }}</p>
+                        <p class="text-xs secondary-text">
+                            <span class="utc-timestamp" data-timestamp="{{ approval.created_at }}">{{ approval.created_at | format_timestamp }}</span>
+                        </p>
+                    </div>
+                </div>
+                <span class="text-xs bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 px-2 py-1 rounded-full font-medium">
+                    {{ approval.approval_type.replace('_', ' ').title() }}
+                </span>
+            </div>
+            
+            <div class="mb-3">
+                {% if approval.approval_type == 'friend_request_out' %}
+                    <p class="text-sm secondary-text mb-2">Wants to send a friend request to:</p>
+                    
+                    <div class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <!-- Target user profile picture -->
+                        <div class="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 border-2 border-gray-200 dark:border-gray-700">
+                            {% if approval.get('target_profile_picture_url') %}
+                                <img src="{{ approval.target_profile_picture_url }}" 
+                                     alt="{{ approval.request_data_parsed.get('receiver_display_name') or approval.request_data_parsed.get('target_display_name', 'User') }}" 
+                                     class="w-full h-full object-cover"
+                                     onerror="this.src='{{ url_for('static', filename='images/default_avatar.png') }}';">
+                            {% else %}
+                                <svg class="w-full h-full text-gray-500 p-2" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                                </svg>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Target user info -->
+                        <div class="flex-1 min-w-0">
+                            {% if approval.get('target_user') %}
+                                <a href="{{ url_for('main.user_profile', puid=approval.target_user.puid) }}" 
+                                   class="font-semibold primary-text hover:text-blue-600 dark:hover:text-blue-400 transition">
+                                    {{ approval.target_user.display_name or approval.request_data_parsed.get('receiver_display_name') or approval.request_data_parsed.get('target_display_name', 'Unknown User') }}
+                                </a>
+                            {% else %}
+                                <p class="font-semibold primary-text">{{ approval.request_data_parsed.get('receiver_display_name') or approval.request_data_parsed.get('target_display_name', 'Unknown User') }}</p>
+                            {% endif %}
+                            
+                            {% if approval.get('target_user') and approval.target_user.hostname %}
+                                <p class="text-xs secondary-text">@{{ approval.target_user.hostname }}</p>
+                            {% elif approval.request_data_parsed.get('receiver_hostname') %}
+                                <p class="text-xs secondary-text">@{{ approval.request_data_parsed.get('receiver_hostname') or approval.request_data_parsed.get('target_hostname') }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% elif approval.approval_type == 'friend_request_in' %}
+                    <p class="text-sm secondary-text mb-2">Received a friend request from:</p>
+                    
+                    <div class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <!-- Target user profile picture -->
+                        <div class="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 border-2 border-gray-200 dark:border-gray-700">
+                            {% if approval.get('target_profile_picture_url') %}
+                                <img src="{{ approval.target_profile_picture_url }}" 
+                                     alt="{{ approval.request_data_parsed.get('target_display_name', 'User') }}" 
+                                     class="w-full h-full object-cover"
+                                     onerror="this.src='{{ url_for('static', filename='images/default_avatar.png') }}';">
+                            {% else %}
+                                <svg class="w-full h-full text-gray-500 p-2" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                                </svg>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Target user info -->
+                        <div class="flex-1 min-w-0">
+                            {% if approval.get('target_user') %}
+                                <a href="{{ url_for('main.user_profile', puid=approval.target_user.puid) }}" 
+                                   class="font-semibold primary-text hover:text-blue-600 dark:hover:text-blue-400 transition">
+                                    {{ approval.target_user.display_name or approval.request_data_parsed.get('target_display_name', 'Unknown User') }}
+                                </a>
+                            {% else %}
+                                <p class="font-semibold primary-text">{{ approval.request_data_parsed.get('target_display_name', 'Unknown User') }}</p>
+                            {% endif %}
+                            
+                            {% if approval.target_hostname %}
+                                <p class="text-xs secondary-text">@{{ approval.target_hostname }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                {% elif approval.approval_type == 'group_join_remote' %}
+                    <p class="text-sm secondary-text mb-2">Wants to join a remote group:</p>
+                    
+                    <div class="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <svg class="w-10 h-10 text-blue-500 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                        </svg>
+                        <div class="flex-1">
+                            <a href="{{ url_for('groups.group_profile', puid=approval.target_puid) }}" 
+                               class="font-semibold text-base primary-text hover:text-blue-600 dark:hover:text-blue-400 transition block">
+                                {{ approval.request_data_parsed.get('group_name', 'Unknown Group') }}
+                            </a>
+                            <p class="text-sm text-blue-600 dark:text-blue-400 mt-1 inline-flex items-center gap-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
+                                </svg>
+                                {{ approval.target_hostname }}
+                            </p>
+                            {% if approval.request_data_parsed.get('rules_agreed') %}
+                                <p class="text-xs text-green-600 dark:text-green-400 mt-1 inline-flex items-center gap-1">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    Agreed to group rules
+                                </p>
+                            {% endif %}
+                        </div>
+                    </div>
+                
+                {% elif approval.approval_type == 'event_invite' %}
+                    <p class="text-sm secondary-text mb-2">Has been invited to a remote event:</p>
+                    
+                    <div class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg flex items-start space-x-4">
+                        {% set insecure_mode = config.get('FEDERATION_INSECURE_MODE', False) %}
+                        {% set protocol = 'http' if insecure_mode else 'https' %}
+                        
+                        <!-- Event Image -->
+                        <a href="{{ protocol }}://{{ approval.target_hostname }}/events/{{ approval.target_puid }}" class="flex-shrink-0">
+                            <div class="w-24 h-24 md:w-32 md:h-32 rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
+                                {% if approval.request_data_parsed.get('profile_picture_path') %}
+                                    <img src="{{ protocol }}://{{ approval.target_hostname }}/event_pictures/{{ approval.request_data_parsed.get('profile_picture_path') }}" 
+                                        alt="{{ approval.request_data_parsed.get('event_title', 'Event') }}" 
+                                        class="w-full h-full object-cover"
+                                        onerror="this.src='{{ url_for('static', filename='images/default_avatar.png') }}';">
+                                {% else %}
+                                    <div class="w-full h-full flex items-center justify-center">
+                                        <svg class="w-12 h-12 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                        </svg>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </a>
+                        
+                        <!-- Event Info -->
+                        <div class="flex-grow min-w-0">
+                            <a href="{{ protocol }}://{{ approval.target_hostname }}/events/{{ approval.target_puid }}" 
+                            class="font-bold text-xl primary-text hover:underline block mb-1">
+                                {{ approval.request_data_parsed.get('event_title', 'Unknown Event') }}
+                            </a>
+                            
+                            {% if approval.formatted_event_datetime %}
+                                <p class="text-sm primary-text mb-1">
+                                    {{ approval.formatted_event_datetime | safe }}
+                                </p>
+                            {% endif %}
+                            
+                            {% if approval.request_data_parsed.get('location') %}
+                                <div class="flex items-center text-sm secondary-text mb-1">
+                                    <svg class="w-4 h-4 mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    </svg>
+                                    <span class="truncate">{{ approval.request_data_parsed.get('location') }}</span>
+                                </div>
+                            {% endif %}
+                            
+                            {% if approval.request_data_parsed.get('creator_display_name') %}
+                                <p class="text-sm secondary-text">
+                                    Hosted by 
+                                    <span class="font-semibold text-blue-600 dark:text-blue-400">
+                                        {{ approval.request_data_parsed.get('creator_display_name', 'Unknown') }}
+                                    </span>
+                                    {% if approval.request_data_parsed.get('source_type') == 'group' and approval.request_data_parsed.get('group_name') %}
+                                        on behalf of 
+                                        <span class="font-semibold text-blue-600 dark:text-blue-400">
+                                            {{ approval.request_data_parsed.get('group_name') }}
+                                        </span>
+                                    {% endif %}
+                                </p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% elif approval.approval_type == 'post_tag' %}
+                    <p class="text-sm secondary-text mb-2">Someone wants to tag them in a post:</p>
+                    
+                    <div class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <!-- Tagger info -->
+                        <div class="flex items-center gap-2 mb-3">
+                            <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                            </svg>
+                            <span class="font-semibold primary-text">{{ approval.request_data_parsed.get('tagger_display_name', 'Someone') }}</span>
+                            <span class="text-sm secondary-text">wants to tag them in a post</span>
+                        </div>
+                        
+                        <!-- Post content preview -->
+                        {% if approval.request_data_parsed.get('post_content') %}
+                        <div class="border-l-4 border-blue-500 pl-3 mb-2">
+                            <p class="text-sm primary-text whitespace-pre-wrap">{{ approval.request_data_parsed.post_content[:300] }}{% if approval.request_data_parsed.post_content|length > 300 %}...{% endif %}</p>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Media indicator -->
+                        {% if approval.request_data_parsed.get('has_media') %}
+                        <div class="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400 mb-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                            <span>Contains {{ approval.request_data_parsed.media_muids|length }} photo(s)</span>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Link to view full post -->
+                        <a href="{{ url_for('main.view_post', cuid=approval.request_data_parsed.post_cuid) }}" 
+                           target="_blank" 
+                           class="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                            </svg>
+                            View full post
+                        </a>
+                    </div>
+                
+                {% elif approval.approval_type == 'media_tag' %}
+                    <p class="text-sm secondary-text mb-2">Someone wants to tag them in a photo:</p>
+                    
+                    <div class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <!-- Tagger info -->
+                        <div class="flex items-center gap-2 mb-3">
+                            <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                            </svg>
+                            <span class="font-semibold primary-text">{{ approval.request_data_parsed.get('tagger_display_name', 'Someone') }}</span>
+                            <span class="text-sm secondary-text">wants to tag them in a photo</span>
+                        </div>
+                        
+                        <!-- Photo preview -->
+                        {% if approval.request_data_parsed.get('media_file_path') %}
+                        <a href="/media/{{ approval.request_data_parsed.muid }}" target="_blank" class="block mb-2">
+                            <img src="{{ url_for('main.serve_user_media', puid=approval.request_data_parsed.media_owner_puid, filename=approval.request_data_parsed.media_file_path) }}"
+                                 alt="Photo to review" 
+                                 class="max-w-sm max-h-64 rounded-lg shadow-md hover:opacity-90 transition-opacity"
+                                 onerror="this.style.display='none';">
+                        </a>
+                        {% endif %}
+                        
+                        <!-- Link to view full photo -->
+                        <a href="/media/{{ approval.request_data_parsed.muid }}" 
+                           target="_blank" 
+                           class="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                            </svg>
+                            View full photo
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+            
+            <div class="flex gap-2">
+                <button onclick="App.Parental.approveRequest({{ approval.id }})" 
+                        class="bg-green-600 hover:bg-green-700 text-white text-sm py-2 px-4 rounded-lg inline-flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    Approve
+                </button>
+                <button onclick="App.Parental.denyRequest({{ approval.id }})" 
+                        class="bg-red-600 hover:bg-red-700 text-white text-sm py-2 px-4 rounded-lg inline-flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                    Deny
+                </button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% else %}
+    <div class="post-card p-6 rounded-lg shadow-sm text-center">
+        <svg class="w-16 h-16 text-green-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <p class="text-lg font-semibold primary-text mb-1">No Pending Approvals</p>
+        <p class="text-sm secondary-text">All approval requests have been processed.</p>
+    </div>
+{% endif %}

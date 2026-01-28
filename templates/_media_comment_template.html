@@ -1,0 +1,182 @@
+{# templates/_media_comment_template.html #}
+{# This template is for media comments - follows the exact structure of _comment_template.html #}
+{# Assumes 'comment', 'current_user_puid', 'current_user', 'is_owner', 'media_item' are available #}
+
+<div class="flex items-start space-x-3 p-3 rounded-lg shadow-sm {% if comment.parent_comment_id %}comment-reply{% endif %} post-card" id="media-comment-{{ comment.cuid }}">
+    <div class="w-12 h-12 rounded-full overflow-hidden border border-gray-300 dark:border-gray-600 flex-shrink-0">
+        {% if comment.profile_picture_path %}
+            {% if comment.hostname %}
+                {# For remote users, construct the full URL #}
+                {% set insecure_mode = config.get('FEDERATION_INSECURE_MODE', False) %}
+                {% set protocol = 'http' if insecure_mode else 'https' %}
+                {% set profile_pic_url = protocol ~ '://' ~ comment.hostname ~ '/profile_pictures/' ~ comment.profile_picture_path %}
+            {% else %}
+                {# For local users #}
+                {% set profile_pic_url = url_for('main.serve_profile_picture', filename=comment.profile_picture_path) %}
+            {% endif %}
+            <img src="{{ profile_pic_url }}" alt="Commenter Profile" class="w-full h-full object-cover" onerror="this.src='{{ url_for('static', filename='images/default_avatar.png') }}';">
+        {% else %}
+            <svg class="w-full h-full text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+            </svg>
+        {% endif %}
+    </div>
+    <div class="flex-grow">
+        <p class="text-sm">
+            <a href="{{ federated_user_profile_url(comment) }}" class="name-link">{{ comment.display_name or comment.username }}</a>
+            <span class="text-gray-500 dark:text-gray-400 text-xs ml-2"><span class="utc-timestamp" data-timestamp="{{ comment.timestamp }}">{{ comment.timestamp | format_timestamp }}</span></span>
+        </p>
+        <p class="primary-text whitespace-pre-wrap text-sm mt-1">{{ comment.content | linkify_mentions | linkify_urls | safe }}</p>
+
+        <!-- Comment Media Display -->
+        {% if comment.media_files %}
+            <div class="comment-media-grid {% if comment.media_files|length > 1 %}grid-cols-2{% endif %}">
+                {% for media_file_data in comment.media_files %}
+                        <div class="comment-media-grid-item"
+                            data-media-id="{{ media_file_data.id }}"
+                            data-muid="{{ media_file_data.muid }}"
+                            data-media-url="{{ federated_media_url(comment, media_file_data.media_file_path) }}"
+                            data-media-type="{% if media_file_data.media_file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')) %}image{% elif media_file_data.media_file_path.lower().endswith(('.mp4', '.mov', '.webm', '.avi', '.mkv')) %}video{% else %}other{% endif %}"
+                            data-alt-text="{{ media_file_data.alt_text | default('') }}"
+                            data-username="{{ comment.username }}"
+                            data-puid="{{ comment.puid }}"
+                            data-comment-id="{{ comment.id }}">>
+                            {% if media_file_data.media_file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')) %}
+                                {# Use thumbnails for all images #}
+                                {% set media_url = federated_media_url(comment, media_file_data.media_file_path) %}
+                                {# Check if comment author is remote to determine thumbnail location #}
+                                {% if comment.hostname and comment.hostname != config.get('NODE_HOSTNAME') %}
+                                    {# Remote comment author - thumbnail is on their node #}
+                                    {% set insecure_mode = config.get('FEDERATION_INSECURE_MODE', False) %}
+                                    {% set protocol = 'http' if insecure_mode else 'https' %}
+                                    {% set thumb_url = protocol ~ '://' ~ comment.hostname ~ '/thumbnails/' ~ comment.puid ~ '/' ~ media_file_data.media_file_path %}
+                                {% else %}
+                                    {# Local comment author - use local thumbnail route #}
+                                    {% set thumb_url = url_for('main.serve_thumbnail',
+                                        puid=comment.puid,
+                                        filename=media_file_data.media_file_path) %}
+                                {% endif %}
+                                <img src="{{ thumb_url }}"
+                                    alt="Comment Media"
+                                    class="w-full h-full object-cover"
+                                    loading="lazy"
+                                    onerror="this.onerror=null; this.src='{{ media_url | e }}'">
+                            {% elif media_file_data.media_file_path.lower().endswith(('.mp4', '.mov', '.webm', '.avi', '.mkv')) %}
+                                <video preload="metadata" muted>
+                                    <source src="{{ federated_media_url(comment, media_file_data.media_file_path) }}#t=0.1" type="video/mp4">
+                                    Your browser does not support the video tag.
+                                </video>
+                                <div class="play-icon">&#9658;</div>
+                            {% else %}
+                                <div class="w-full h-full flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-center text-xs">
+                                    Unsupported Media
+                                </div>
+                            {% endif %}
+                        </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <button type="button" onclick="replyToMediaComment('{{ comment.cuid }}', '{{ (comment.display_name or comment.username) | js_string }}')" class="text-blue-500 dark:text-blue-400 hover:underline text-xs mt-1">Reply</button>
+    </div>
+
+    {# Options menu #}
+    {% set is_comment_author = current_user_puid and current_user_puid == comment.puid %}
+    {% set can_edit_comment = is_comment_author %}
+    {% set can_delete_comment = is_comment_author or is_owner %}
+
+    {# Check if current user is mentioned #}
+    {% set is_mentioned_in_comment = false %}
+    {% if current_user_puid and comment.content %}
+        {% set viewer_user = get_user_by_puid(current_user_puid) %}
+        {% set user_display_name = (viewer_user.display_name or viewer_user.username) if viewer_user else '' %}
+        {% if user_display_name and ('@' + user_display_name.lower()) in comment.content.lower() %}
+            {% set is_mentioned_in_comment = true %}
+        {% endif %}
+    {% endif %}
+
+    {# Show hide option for any logged-in user who isn't the comment author #}
+    {% set show_hide_option = current_user_puid and current_user_puid != comment.puid %}
+
+    {% if can_edit_comment or can_delete_comment or is_mentioned_in_comment or show_hide_option %}
+    <div class="relative flex-shrink-0 ml-2">
+        <button onclick="toggleMediaCommentDropdown(event, 'media-comment-options-{{ comment.cuid }}')" type="button" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
+            </svg>
+        </button>
+        <div id="media-comment-options-{{ comment.cuid }}" class="hidden fixed bg-white dark:bg-gray-700 rounded-md shadow-lg z-[100] w-48" role="menu">
+            <div class="py-1">
+                {% if can_edit_comment %}
+                <button onclick="editMediaComment('{{ comment.cuid }}', '{{ comment.content | js_string }}', '{{ comment.media_files | tojson | default('[]') | js_string }}')" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600" role="menuitem">
+                    <span class="inline-flex items-center gap-2">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
+                        <span>Edit</span>
+                    </span>
+                </button>
+                {% endif %}
+
+                {% if can_delete_comment %}
+                <button type="button" onclick="deleteMediaComment('{{ comment.cuid }}')" class="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-600" role="menuitem">
+                    <span class="inline-flex items-center gap-2">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                        <span>Delete</span>
+                    </span>
+                </button>
+                {% endif %}
+                
+                {% if is_mentioned_in_comment %}
+                <button type="button" onclick="removeMentionFromMediaComment('{{ comment.cuid }}')" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600" role="menuitem">
+                    <span class="inline-flex items-center gap-2">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <span>Remove my @mention</span>
+                    </span>
+                </button>
+                {% endif %}
+                
+                {% if show_hide_option %}
+                <button type="button" onclick="hideMediaComment({{ comment.id }})" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600" role="menuitem">
+                    <span class="inline-flex items-center gap-2">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+                        </svg>
+                        <span>Hide this comment</span>
+                    </span>
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{# RECURSIVE INCLUDE for replies #}
+{% if comment.replies %}
+    <div class="replies-container" id="media-replies-container-{{ comment.cuid }}">
+        <div class="space-y-4 replies-list">
+        {% for reply in comment.replies %}
+            {% set reply_classes = 'extra-reply hidden' if loop.index > 1 else '' %}
+            <div class="{{ reply_classes }}">
+            {% with comment=reply, current_user_puid=current_user_puid, current_user=current_user, is_owner=is_owner, media_item=media_item %}
+                {% include '_media_comment_template.html' %}
+            {% endwith %}
+            </div>
+        {% endfor %}
+        </div>
+        
+        {% if comment.replies | length > 1 %}
+            <button type="button" 
+                    onclick="App.Comment.showMore(this, 'media-replies-container-{{ comment.cuid }}', 'extra-reply')" 
+                    class="text-xs font-semibold text-blue-500 dark:text-blue-400 hover:underline mt-1 ml-16 show-more-button">
+                {% set remaining_replies = comment.replies | length - 1 %}
+                View {{ remaining_replies }} more {{ 'reply' if remaining_replies == 1 else 'replies' }}
+            </button>
+        {% endif %}
+    </div>
+{% endif %}

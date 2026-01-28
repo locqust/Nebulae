@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Groups - Self-Hosted Social App</title>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+
+    <!-- Preload critical CSS -->
+    <link rel="preload" href="{{ url_for('static', filename='css/style.css') }}" as="style">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="flex flex-col min-h-screen items-center py-8 px-4">
+    <div class="max-w-3xl w-full bg-white p-8 rounded-lg shadow-xl border border-gray-200">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">My Groups</h1>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="mb-4">
+                    {% for category, message in messages %}
+                        <div class="flash-message flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <div class="mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Groups List</h2>
+            {% if groups %}
+                <ul class="space-y-3">
+                    {% for group in groups %}
+                        <li class="flex items-center justify-between bg-gray-50 p-4 rounded-lg shadow-sm border border-gray-200">
+                            <div class="flex items-center">
+                                <div class="w-12 h-12 rounded-full overflow-hidden mr-4 border border-gray-300">
+                                    {% if group.profile_picture_path %}
+                                        {% set filename = group.profile_picture_path %}
+                                        {% set hostname = group.hostname %}
+                                        {% set protocol = 'http' if config.FEDERATION_INSECURE_MODE else 'https' %}
+                                        
+                                        {% if hostname %}
+                                            <img src="{{ protocol }}://{{ hostname }}/profile_pictures/{{ filename }}" alt="Group Picture" class="w-full h-full object-cover">
+                                        {% else %}
+                                            <img src="{{ url_for('main.serve_profile_picture', filename=filename) }}" alt="Group Picture" class="w-full h-full object-cover">
+                                        {% endif %}
+                                    {% else %}
+                                        <svg class="w-full h-full text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                                        </svg>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <a href="{{ federated_user_profile_url(group) }}" class="font-semibold text-blue-600 hover:underline text-lg">
+                                        {{ group.display_name }}
+                                    </a>
+                                    <div class="flex items-center space-x-2">
+                                        <p class="text-sm text-gray-500">Member since: {{ group.joined_at | format_timestamp }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <form action="{{ url_for('groups.leave_group_route', puid=group.puid) }}" method="POST" onsubmit="return confirm('Are you sure you want to leave the group: {{ group.display_name | js_string }}?');">
+                                <button type="submit" class="text-red-600 font-semibold py-2 px-4 rounded-lg hover:bg-red-50 transition duration-300 ease-in-out text-sm">
+                                    Leave Group
+                                </button>
+                            </form>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-center text-gray-600">You haven't joined any groups yet.</p>
+            {% endif %}
+        </div>
+
+        <div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Outgoing Join Requests</h2>
+            {% if pending_outgoing_requests %}
+                <ul class="space-y-3">
+                    {% for request in pending_outgoing_requests %}
+                        <li class="flex items-center bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200">
+                            <div class="w-12 h-12 rounded-full overflow-hidden mr-4 border border-gray-300">
+                                {% if request.group_profile_picture_path %}
+                                    <img src="{{ url_for('main.serve_profile_picture', filename=request.group_profile_picture_path) }}" alt="Group Picture" class="w-full h-full object-cover">
+                                {% else %}
+                                    <svg class="w-full h-full text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                                    </svg>
+                                {% endif %}
+                            </div>
+                            <span class="font-semibold text-gray-800 text-lg">Request sent to join {{ request.group_display_name }}</span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-center text-gray-600">You have no outgoing group join requests.</p>
+            {% endif %}
+        </div>
+
+        <div class="mt-8 text-center">
+            <a href="{{ url_for('main.index') }}"
+               class="inline-block bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out">
+                Back to Main Feed
+            </a>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+        <!-- PWA Support -->
+    <script src="{{ url_for('static', filename='js/pwa.js') }}"></script>
+</body>
+</html>
+

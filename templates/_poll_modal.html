@@ -1,0 +1,99 @@
+{# templates/_poll_modal.html #}
+{# Modal for adding a poll to a post #}
+
+<div id="poll-modal" class="modal hidden">
+    <div class="modal-content max-w-2xl">
+        <span class="close-button" onclick="closePollModal()">&times;</span>
+        <h3 class="text-xl font-bold primary-text mb-4">Add Poll</h3>
+        
+        {# Poll Options List #}
+        <div id="poll-options-container" class="mb-4">
+            <div class="poll-option-item flex items-center gap-2 mb-2">
+                <input type="text" 
+                       class="poll-option-input flex-1 px-4 py-2 border rounded-md form-input"
+                       placeholder="Option 1"
+                       maxlength="200">
+                <button type="button" 
+                        onclick="removePollOption(this)"
+                        class="text-gray-400 hover:text-red-500 p-2 cursor-not-allowed opacity-50"
+                        disabled>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="poll-option-item flex items-center gap-2 mb-2">
+                <input type="text" 
+                       class="poll-option-input flex-1 px-4 py-2 border rounded-md form-input"
+                       placeholder="Option 2"
+                       maxlength="200">
+                <button type="button" 
+                        onclick="removePollOption(this)"
+                        class="text-gray-400 hover:text-red-500 p-2 cursor-not-allowed opacity-50"
+                        disabled>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="poll-option-item flex items-center gap-2 mb-2">
+                <input type="text" 
+                       class="poll-option-input flex-1 px-4 py-2 border rounded-md form-input"
+                       placeholder="Option 3"
+                       maxlength="200">
+                <button type="button" 
+                        onclick="removePollOption(this)"
+                        class="text-gray-400 hover:text-red-500 p-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        
+        {# Add Option Button #}
+        <button type="button" 
+                onclick="addPollOption()"
+                class="mb-4 px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-md secondary-text inline-flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            Add Option
+        </button>
+        
+        {# Poll Settings #}
+        <div class="mb-6 space-y-3 border-t pt-4">
+            <label class="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" 
+                       id="poll-allow-multiple"
+                       class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+                <span class="secondary-text">Allow people to choose multiple answers</span>
+            </label>
+            
+            <label class="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" 
+                       id="poll-allow-add-options"
+                       class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+                <span class="secondary-text">Allow anyone to add options</span>
+            </label>
+        </div>
+        
+        {# Error Message #}
+        <div id="poll-error" class="hidden mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded-md text-sm">
+        </div>
+        
+        {# Modal Footer #}
+        <div class="flex items-center justify-end gap-3">
+            <button type="button" 
+                    onclick="closePollModal()" 
+                    class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 secondary-text">
+                Cancel
+            </button>
+            <button type="button" 
+                    onclick="applyPoll()" 
+                    class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+                Add to Post
+            </button>
+        </div>
+    </div>
+</div>

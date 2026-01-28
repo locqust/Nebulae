@@ -1,0 +1,89 @@
+{# templates/_event_card.html #}
+{# NEW: Define search text using title, location, creator, and group name #}
+{% set search_text = (event.title or '') | lower + ' ' + (event.location or '') | lower + ' ' + (event.creator_display_name or '') | lower + ' ' + (event.group_name or '') | lower %}
+{# MODIFIED: Added data-search-text attribute and class event-card-item #}
+<div class="p-4 rounded-lg shadow-sm border post-card flex items-start space-x-4 relative event-card-item" data-search-text="{{ search_text }}">
+    <!-- Event Image -->
+    <a href="{{ federated_event_profile_url(event) }}" class="flex-shrink-0">
+        <div class="w-24 h-24 md:w-32 md:h-32 rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
+            {% if event.profile_picture_path %}
+                <img src="{{ federated_event_picture_url(event) }}" alt="{{ event.title }}" class="w-full h-full object-cover">
+            {% else %}
+                <div class="w-full h-full flex items-center justify-center">
+                    <svg class="w-12 h-12 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                </div>
+            {% endif %}
+        </div>
+    </a>
+
+    <!-- Event Info and Actions -->
+    <div class="flex-grow min-w-0">
+        <a href="{{ federated_event_profile_url(event) }}">
+            <h4 class="text-xl font-bold primary-text hover:underline">
+                {% if event.is_cancelled %}
+                    <span class="text-red-500">Cancelled - </span>
+                {% endif %}
+                {{ event.title }}
+            </h4>
+        </a>
+        <p class="text-sm mt-1 primary-text">{{ event.event_datetime | format_event_datetime(event.event_end_datetime) | safe }}</p>
+
+        <div class="flex items-center text-sm secondary-text mt-1">
+             <svg class="w-4 h-4 mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+             <span class="truncate">{{ event.location | linkify_location | safe }}</span>
+        </div>
+
+        {% if event.creator_display_name %}
+            {% set creator = {'puid': event.created_by_user_puid, 'display_name': event.creator_display_name, 'hostname': event.creator_hostname} %}
+            <p class="text-sm secondary-text mt-1">
+                Hosted by <a href="{{ federated_user_profile_url(creator) }}" class="font-semibold text-blue-600 dark:text-blue-400 hover:underline">{{ event.creator_display_name }}</a>
+                {% if event.source_type == 'group' and event.group_name %}
+                    on behalf of <a href="{{ url_for('groups.group_profile', puid=event.group_puid) }}" class="font-semibold text-blue-600 dark:text-blue-400 hover:underline">{{ event.group_name }}</a>
+                {% endif %}
+            </p>
+        {% endif %}
+
+        {% if not event.is_cancelled %}
+        <div class="mt-4 flex items-center space-x-2">
+            {# Going Button #}
+            <button type="button" onclick="App.Events.respond('{{ event.puid }}', 'attending')" class="text-sm font-semibold py-2 px-3 md:px-4 rounded-full transition duration-200 inline-flex items-center justify-center gap-1.5
+                {% if event.response == 'attending' or event.viewer_response == 'attending' %}
+                    bg-green-500 text-white shadow-md
+                {% else %}
+                    bg-gray-200 hover:bg-green-200 text-gray-700 dark:bg-gray-600 dark:hover:bg-green-700 dark:text-gray-200
+                {% endif %}">
+                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span class="hidden md:inline">Going</span>
+            </button>
+            
+            {# Interested Button #}
+            <button type="button" onclick="App.Events.respond('{{ event.puid }}', 'tentative')" class="text-sm font-semibold py-2 px-3 md:px-4 rounded-full transition duration-200 inline-flex items-center justify-center gap-1.5
+                {% if event.response == 'tentative' or event.viewer_response == 'tentative' %}
+                    bg-yellow-500 text-white shadow-md
+                {% else %}
+                    bg-gray-200 hover:bg-yellow-200 text-gray-700 dark:bg-gray-600 dark:hover:bg-yellow-600 dark:text-gray-200
+                {% endif %}">
+                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                </svg>
+                <span class="hidden md:inline">Interested</span>
+            </button>
+            
+            {# Decline Button #}
+            <button type="button" onclick="App.Events.respond('{{ event.puid }}', 'declined')" class="text-sm font-semibold py-2 px-3 md:px-4 rounded-full transition duration-200 inline-flex items-center justify-center gap-1.5
+                {% if event.response == 'declined' or event.viewer_response == 'declined' %}
+                    bg-red-500 text-white shadow-md
+                {% else %}
+                    bg-gray-200 hover:bg-red-200 text-gray-700 dark:bg-gray-600 dark:hover:bg-red-700 dark:text-gray-200
+                {% endif %}">
+                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span class="hidden md:inline">Decline</span>
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</div>

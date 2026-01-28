@@ -1,0 +1,66 @@
+<!-- Flash Messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <div class="mb-4">
+            {% for category, message in messages %}
+                <div class="flash-message flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
+
+{% if username %}
+    <!-- Create Post Form Partial -->
+    {% if not session.get('is_admin') and not is_single_post_view %}
+        {% with profile_user=current_user_profile, profile_puid=current_user_puid, user_media_path=user_media_path, is_federated_viewer=false, viewer_home_url=viewer_home_url, viewer_puid_for_js=viewer_puid_for_js %}
+            {% include '_create_post_form.html' %}
+        {% endwith %}
+    {% endif %}
+
+    <h2 class="text-2xl font-bold mb-4 primary-text">Feed</h2>
+    {% if posts %}
+        <div class="space-y-6" id="feed-posts-container" data-limit="20">
+            {% for post in posts %}
+                {% with post=post, current_user_id=current_user_id, current_user_puid=current_user_puid, is_admin=session.get('is_admin'), is_federated_viewer=is_federated_viewer, viewer_home_url=viewer_home_url %}
+                    {% include '_post_template.html' %}
+                {% endwith %}
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-center secondary-text text-lg">No posts to display yet.</p>
+    {% endif %}
+
+{% else %}
+    <!-- Logged-out view -->
+    <div class="max-w-md mx-auto">
+        <div class="p-8 rounded-lg shadow-xl border post-card text-center">
+            <h1 class="text-3xl font-bold text-center mb-6 primary-text">Welcome to Your Social Node</h1>
+            <p class="text-md secondary-text text-center mb-6">Please log in to access your feed and profile.</p>
+            <a href="{{ url_for('auth.login') }}" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition duration-300 ease-in-out text-center">Login</a>
+        </div>
+
+        <!-- Footer with version and license info -->
+        <footer class="mt-8 text-center text-xs text-gray-500 dark:text-gray-400">
+            <div class="space-y-2">
+                <div>
+                    <span class="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">NODE v{{ config['APP_VERSION'] if 'APP_VERSION' in config else '0.8.0-beta' }}</span>
+                </div>
+                <div>
+                    Released under <a href="https://www.gnu.org/licenses/agpl-3.0.en.html" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">AGPL-3.0</a>
+                </div>
+                <div class="flex justify-center gap-4 pt-1">
+                    <a href="https://github.com/locqust/NODE" target="_blank" rel="noopener noreferrer" class="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                        </svg>
+                        GitHub
+                    </a>
+                    <span class="text-gray-400">•</span>
+                    <span class="text-gray-400">Discord: Coming soon</span>
+                    <span class="text-gray-400">•</span>
+                    <span class="text-gray-400">Docs: Coming soon</span>
+                </div>
+            </div>
+        </footer>
+    </div>
+{% endif %}

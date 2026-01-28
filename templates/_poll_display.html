@@ -1,0 +1,91 @@
+{# templates/_poll_display.html #}
+{# Displays a poll within a post #}
+{# Expects: poll, post, current_user_id #}
+
+{% if poll %}
+<!-- DEBUG: current_user_id={{ current_user_id }}, post.author.id={{ post.author.id if post.author else 'NO AUTHOR' }}, post.user_id={{ post.user_id if post.user_id else 'NO USER_ID' }}, options_count={{ poll.options|length }} -->
+<div class="poll-container mt-4 p-4 border rounded-lg bg-gray-50 dark:bg-gray-800" data-poll-cuid="{{ post.cuid }}" data-poll-id="{{ poll.id }}">
+    <div class="poll-options-container space-y-2 mb-3">
+        {% for option in poll.options %}
+        <div class="poll-option {% if option.id in poll.viewer_votes %}poll-option-voted{% endif %} relative cursor-pointer rounded-lg border border-gray-300 dark:border-gray-600 p-3 transition hover:border-blue-400 dark:hover:border-blue-500"
+             onclick="voteOnPoll('{{ post.cuid }}', {{ option.id }}, {{ 'true' if poll.allow_multiple_answers else 'false' }})">
+            {# Progress bar background #}
+            <div class="poll-option-bar absolute inset-0 bg-blue-100 dark:bg-blue-900 rounded-lg transition-all" 
+                 style="width: {{ option.percentage }}%; opacity: 0.3;"></div>
+            
+            {# Option content #}
+            <div class="poll-option-content relative flex items-center justify-between">
+                <div class="flex items-center gap-3 flex-1">
+                    {# Checkbox or radio #}
+                    {% if poll.allow_multiple_answers %}
+                    <input type="checkbox" 
+                           {% if option.id in poll.viewer_votes %}checked{% endif %}
+                           onclick="event.stopPropagation()"
+                           class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+                    {% else %}
+                    <div class="poll-radio w-4 h-4 rounded-full border-2 {% if option.id in poll.viewer_votes %}border-blue-600{% else %}border-gray-400{% endif %} flex items-center justify-center">
+                        {% if option.id in poll.viewer_votes %}
+                        <div class="w-2 h-2 rounded-full bg-blue-600"></div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    <span class="flex-1 primary-text">{{ option.option_text }}</span>
+                </div>
+                
+                <div class="flex items-center gap-3">
+                    <span class="poll-percentage font-semibold text-blue-600 dark:text-blue-400">{{ option.percentage }}%</span>
+                    
+                    {# Voters link #}
+                    {% if option.vote_count > 0 %}
+                    <button onclick="showPollVoters(event, {{ option.id }})" 
+                            class="text-xs text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 underline">
+                        {{ option.vote_count }} vote{{ 's' if option.vote_count != 1 else '' }}
+                    </button>
+                    {% endif %}
+                    
+                    {# Delete button for any option (only for poll creator, must keep min 2 options) #}
+                    {# Try multiple ways to check if user is the post author #}
+                    {% set is_author = (current_user_id and ((post.author and current_user_id == post.author.id) or (post.user_id and current_user_id == post.user_id))) %}
+                    {% if is_author and poll.options|length > 2 %}
+                    <button onclick="event.stopPropagation(); deletePollOption('{{ post.cuid }}', {{ option.id }})"
+                            class="text-gray-400 hover:text-red-500 ml-2"
+                            title="Delete this option"
+                            aria-label="Delete option">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    {# Total votes #}
+    <div class="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mb-3">
+        <span class="poll-total-votes">{{ poll.total_votes }} vote{{ 's' if poll.total_votes != 1 else '' }}</span>
+        {% if poll.allow_multiple_answers %}
+        <span class="text-xs">Multiple answers allowed</span>
+        {% endif %}
+    </div>
+    
+    {# Add option input (if allowed) #}
+    {% if poll.allow_add_options and current_user_id %}
+    <div class="border-t pt-3">
+        <div class="flex gap-2">
+            <input type="text" 
+                   class="add-poll-option-input flex-1 px-3 py-2 text-sm border rounded-md form-input"
+                   placeholder="Add your option..."
+                   maxlength="200"
+                   onkeypress="if(event.key === 'Enter') { addUserPollOption('{{ post.cuid }}', {{ poll.id }}); }">
+            <button onclick="addUserPollOption('{{ post.cuid }}', {{ poll.id }})"
+                    class="px-4 py-2 bg-blue-500 text-white text-sm rounded-md hover:bg-blue-600">
+                Add
+            </button>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}

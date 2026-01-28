@@ -1,0 +1,563 @@
+{# templates/_post_template.html #}
+{# This template is intended to be included by index.html, user_profile.html, and public_page_profile.html #}
+{# It assumes 'post', 'current_user_id', 'current_user_puid', 'is_viewer_group_moderator' (if applicable), etc. are available in context #}
+{# NEW: For public pages, expects 'is_public_page_context' to be True, which adjusts profile links and CSS classes #}
+
+{# FIX: Define original_post *before* it is used #}
+{% if post.is_repost %}
+    {% set original_post = post.original_post %}
+{% else %}
+    {% set original_post = post %}
+{% endif %}
+
+{# Determine the item class based on context #}
+{% if is_public_page_context %}
+    {% set item_class = 'page-post-item' %}
+{% else %}
+    {% set item_class = 'group-post-item' %}
+{% endif %}
+
+{% set search_text = ((original_post.content or '') + ' ' + (original_post.author.display_name or '') + ' ' + (original_post.author.username or '')) | lower %}
+<div class="p-4 rounded-lg shadow-sm border post-card {{ item_class }}" id="post-{{ post.cuid }}" data-search-text="{{ search_text | e }}">
+    <!-- REPOST FEATURE: Display repost header if applicable -->
+    {% if post.is_repost %}
+        <div class="repost-header mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+            <p class="text-sm secondary-text flex items-start flex-wrap gap-x-1 gap-y-0.5">
+                <svg class="w-5 h-5 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 110 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"></path></svg>
+                {% if is_public_page_context %}
+                    <a href="{{ url_for('main.public_page_profile', puid=post.author.puid) }}" class="name-link mr-1">{{ post.author.display_name }}</a> shared a post
+                {% else %}
+                    <a href="{{ federated_user_profile_url(post.author) }}" class="name-link mr-1">{{ post.author.display_name }}</a> shared a post
+                {% endif %}
+            </p>
+        </div>
+        {# original_post is already defined above #}
+    {% endif %}
+    <div class="flex justify-between items-start mb-1">
+        <div class="flex items-start gap-2 flex-1 min-w-0">
+            <!-- Profile Picture (fixed, doesn't wrap) -->
+            <div class="flex-shrink-0">
+                {% if original_post.author.profile_picture_path %}
+                    {% if original_post.author.hostname %}
+                        {# Remote user: construct full federated URL #}
+                        {% set insecure_mode = config.get('FEDERATION_INSECURE_MODE', False) %}
+                        {% set protocol = 'http' if insecure_mode else 'https' %}
+                        <img src="{{ protocol }}://{{ original_post.author.hostname }}/profile_pictures/{{ original_post.author.profile_picture_path }}" 
+                             alt="Profile Picture" 
+                             class="w-10 h-10 rounded-full object-cover">
+                    {% else %}
+                        {# Local user: use local route #}
+                        <img src="{{ url_for('main.serve_profile_picture', filename=original_post.author.profile_picture_path) }}" 
+                             alt="Profile Picture" 
+                             class="w-10 h-10 rounded-full object-cover">
+                    {% endif %}
+                {% else %}
+                    {# No profile picture: show default avatar SVG #}
+                    <svg class="w-10 h-10 text-gray-500 rounded-full" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                    </svg>
+                {% endif %}
+            </div>
+            
+            <!-- Text Content (wraps within this container) -->
+            <div class="flex-1 min-w-0">
+                <p class="text-sm secondary-text flex items-baseline flex-wrap gap-x-1">
+                    {% if is_public_page_context %}
+                        <a href="{{ url_for('main.public_page_profile', puid=original_post.author.puid) }}" class="name-link">
+                            {{ original_post.author.display_name }}
+                        </a>
+                    {% else %}
+                        <a href="{{ federated_user_profile_url(original_post.author) }}" class="name-link">
+                            {{ original_post.author.display_name }}
+                        </a>
+                    {% endif %}
+                    
+                    {# NEW: Display tagged users #}
+                    {% if original_post.tagged_user_puids %}
+                        {% set tagged_puids = original_post.tagged_user_puids|from_json if original_post.tagged_user_puids is string else original_post.tagged_user_puids %}
+                        {% if tagged_puids and tagged_puids|length > 0 %}
+                            <span class="secondary-text">is with</span>
+                            {% if tagged_puids|length == 1 %}
+                                {# Single tagged user #}
+                                {% set tagged_user = get_user_by_puid(tagged_puids[0]) %}
+                                {% if tagged_user %}
+                                    <a href="{{ federated_user_profile_url(tagged_user) }}" class="name-link">
+                                        {{ tagged_user.display_name }}
+                                    </a>
+                                {% endif %}
+                            {% elif tagged_puids|length == 2 %}
+                                {# Two tagged users: "Name1 and Name2" #}
+                                {% set tagged_user_1 = get_user_by_puid(tagged_puids[0]) %}
+                                {% set tagged_user_2 = get_user_by_puid(tagged_puids[1]) %}
+                                {% if tagged_user_1 %}
+                                    <a href="{{ federated_user_profile_url(tagged_user_1) }}" class="name-link">
+                                        {{ tagged_user_1.display_name }}
+                                    </a>
+                                {% endif %}
+                                <span class="secondary-text">and</span>
+                                {% if tagged_user_2 %}
+                                    <a href="{{ federated_user_profile_url(tagged_user_2) }}" class="name-link">
+                                        {{ tagged_user_2.display_name }}
+                                    </a>
+                                {% endif %}
+                            {% else %}
+                                {# Three or more: "Name1 and X others" #}
+                                {% set tagged_user = get_user_by_puid(tagged_puids[0]) %}
+                                {% if tagged_user %}
+                                    <a href="{{ federated_user_profile_url(tagged_user) }}" class="name-link">
+                                        {{ tagged_user.display_name }}
+                                    </a>
+                                {% endif %}
+                                <span class="secondary-text">and</span>
+                                <a href="#" onclick="showTaggedPeopleModal('{{ original_post.cuid }}', event); return false;" class="text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                                    {{ tagged_puids|length - 1 }} other{{ 's' if (tagged_puids|length - 1) > 1 else '' }}
+                                </a>
+                            {% endif %}
+                        {% endif %}
+                    {% endif %}
+                    
+                    {# NEW: Display location #}
+                    {% if original_post.location %}
+                        <span class="secondary-text">at</span>
+                        <a href="https://www.google.com/maps/search/{{ original_post.location | urlencode }}" 
+                           target="_blank" 
+                           rel="noopener noreferrer" 
+                           class="text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                            {{ original_post.location }}
+                        </a>
+                    {% endif %}
+
+                    {% if original_post.group and original_post.group.puid %}
+                        <span>&#9658;</span>
+                        <a href="{{ federated_group_profile_url(original_post.group) }}" class="name-link">
+                            {{ original_post.group.name }}
+                        </a>
+                    {% elif original_post.profile_owner and original_post.author.puid != original_post.profile_owner.puid %}
+                        <span>&#9658;</span>
+                        <a href="{{ url_for('main.user_profile', puid=original_post.profile_owner.puid) }}" class="name-link">
+                            {{ original_post.profile_owner.display_name }}
+                        </a>
+                    {% elif original_post.event and (original_post.content or original_post.media_files) %}
+                        <span>&#9658;</span>
+                        <a href="{{ url_for('events.event_profile', puid=original_post.event.puid) }}" class="name-link">
+                            {{ original_post.event.title }}
+                        </a>
+                    {% endif %}
+                </p>
+                
+                <!-- Timestamp on its own line -->
+                <a href="{{ url_for('main.view_post', cuid=original_post.cuid) }}" class="hover:underline">
+                    <span class="text-xs secondary-text utc-timestamp" data-timestamp="{{ original_post.timestamp }}">
+                        {{ original_post.timestamp | format_timestamp }}
+                    </span>
+                </a>
+            </div>
+        </div>
+
+        {# MODIFICATION START: Show dropdown only if there are options within it #}
+        {% set show_edit_option = current_user_puid == original_post.author.puid and not post.is_repost %}
+        {% set show_delete_option = (
+                current_user_puid == post.author.puid
+                or (post.profile_owner and current_user_puid == post.profile_owner.puid)
+                or (post.group and is_viewer_group_moderator)
+                or is_admin
+            )
+        %}
+        {% set show_share_option = current_user_puid and original_post.privacy_setting == 'public' and not post.is_repost %}
+        {# NEW: Define permission for disabling comments #}
+        {% set can_disable_comments = show_delete_option and not post.is_repost %}
+        {# NEW: Define permission for friend actions (snooze/block) #}
+        {% set show_friend_options = current_user_puid and original_post.author.puid != current_user_puid and original_post.author.puid in friend_puids %}
+        
+        {# NEW: Check if current user is tagged in this post #}
+        {% set is_tagged_in_post = false %}
+        {% if current_user_puid and original_post.tagged_user_puids %}
+            {% set tagged_puids = original_post.tagged_user_puids|from_json if original_post.tagged_user_puids is string else original_post.tagged_user_puids %}
+            {% if current_user_puid in tagged_puids %}
+                {% set is_tagged_in_post = true %}
+            {% endif %}
+        {% endif %}
+        
+        {# NEW: Check if current user is mentioned #}
+        {% set is_mentioned_in_post = false %}
+        {% if current_user_puid and original_post.content %}
+            {% set viewer_user = get_user_by_puid(current_user_puid) %}
+            {% set user_display_name = (viewer_user.display_name or viewer_user.username) if viewer_user else '' %}
+            {% if user_display_name and ('@' + user_display_name.lower()) in original_post.content.lower() %}
+                {% set is_mentioned_in_post = true %}
+            {% endif %}
+        {% endif %}
+        
+        {# NEW: Show hide option for any logged-in user who isn't the post author #}
+        {% set show_hide_option = current_user_puid and current_user_puid != original_post.author.puid %}
+
+
+        {% if show_edit_option or show_delete_option or show_share_option or can_disable_comments or show_friend_options or is_tagged_in_post or is_mentioned_in_post or show_hide_option %}
+            <div class="relative inline-block text-left">
+                <button type="button" class="inline-flex justify-center w-full rounded-md px-2 py-1 text-sm font-medium secondary-text hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" id="options-menu-{{ post.cuid }}" onclick="toggleDropdown(event, 'dropdown-menu-{{ post.cuid }}')">
+                    <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                    </svg>
+                </button>
+                <div class="dropdown-menu" id="dropdown-menu-{{ post.cuid }}">
+                    <div class="py-1">
+                        {% if show_edit_option %}
+                            <button onclick="openEditPostModal('{{ original_post.cuid }}', '{{ original_post.author.puid }}', '{{ original_post.content | js_string }}', '{{ original_post.privacy_setting }}', '{{ original_post.media_files | tojson | js_string }}', '{{ viewer_home_url }}', {{ 'true' if is_federated_viewer else 'false' }}, {{ 'true' if original_post.group else 'false' }}, {{ 'true' if original_post.author.user_type == 'public_page' else 'false' }}, {{ 'true' if original_post.event else 'false' }}, '{{ original_post.tagged_user_puids | js_string }}', '{{ original_post.location | js_string }}', {{ 'true' if current_user_requires_parental_approval else 'false' }}, {{ 'true' if (original_post.profile_owner and original_post.profile_owner.requires_parental_approval) else 'false' }})" class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700">
+                                <span class="inline-flex items-center gap-2">
+                                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                    </svg>
+                                    <span>Edit</span>
+                                </span>
+                            </button>
+                        {% endif %}
+
+                        {% if show_delete_option %}
+                        <form action="{{ url_for('main.delete_post_route', post_cuid=post.cuid) }}" method="POST" onsubmit="event.preventDefault();">
+                            <button type="button" onclick="confirmFormSubmission(this.closest('form'), 'Are you sure you want to delete this post? This action cannot be undone.')" class="text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm">
+                                <span class="inline-flex items-center gap-2">
+                                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                    <span>Delete</span>
+                                </span>
+                            </button> 
+                        {% endif %}
+
+                        {% if show_share_option %}
+                        <form action="{{ url_for('main.repost_route', cuid=original_post.cuid) }}" method="POST" onsubmit="event.preventDefault();">
+                            <button type="button" onclick="confirmFormSubmission(this.closest('form'), 'Share this post to your own timeline?')" class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"">
+                                <span class="inline-flex items-center gap-2">
+                                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
+                                    </svg>
+                                    <span>Share</span>
+                                </span>
+                            </button>
+                        </form>
+                        {% endif %}
+
+                        {# NEW: Add "Disable Comments" button #}
+                        {% if can_disable_comments and not original_post.comments_disabled %}
+                        <form action="{{ url_for('main.disable_comments_route', cuid=original_post.cuid) }}" method="POST" onsubmit="event.preventDefault();">
+                            <button type="button" onclick="confirmFormSubmission(this.closest('form'), 'Are you sure you want to permanently disable comments on this post? This cannot be undone.')" class="text-orange-600 dark:text-orange-400 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm">
+                                <span class="inline-flex items-center gap-2">
+                                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3l18 18"></path>
+                                    </svg>
+                                    <span>Disable Comments</span>
+                                </span>
+                            </button>
+                        </form>
+                        {% endif %}
+                        {# NEW: Snooze and Block options for friend posts #}
+                        {% if show_friend_options %}
+                            <form action="{% if viewer_home_url %}{{ viewer_home_url }}{{ url_for('friends.snooze_friend_route', puid=original_post.author.puid) }}{% else %}{{ url_for('friends.snooze_friend_route', puid=original_post.author.puid) }}{% endif %}" method="POST">
+                                <button type="submit" class="hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm">
+                                    <span class="inline-flex items-center gap-2">
+                                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.829a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M13 12a1 1 0 11-2 0 1 1 0 012 0z"></path>
+                                        </svg>
+                                        <span>Snooze {{ original_post.author.display_name or original_post.author.username }}</span>
+                                    </span>
+                                </button>
+                            </form>
+                            <form action="{% if viewer_home_url %}{{ viewer_home_url }}{{ url_for('friends.block_friend_route', puid=original_post.author.puid) }}{% else %}{{ url_for('friends.block_friend_route', puid=original_post.author.puid) }}{% endif %}" method="POST" onsubmit="event.preventDefault();">
+                                <button type="button" onclick="confirmFormSubmission(this.closest('form'), 'Are you sure you want to block {{ original_post.author.display_name or original_post.author.username | js_string }}? You will no longer see their posts and they will not be able to interact with your content.')" class="text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm">
+                                    <span class="inline-flex items-center gap-2">
+                                        <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                                            <path fill-rule="evenodd" 
+                                                d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" 
+                                                clip-rule="evenodd"/>
+                                        </svg>
+                                        <span>Block {{ original_post.author.display_name or original_post.author.username }}</span>
+                                    </span>
+                                </button>
+                            </form>
+                        {% endif %}
+                        
+                        {# NEW: Remove Tag Option #}
+                        {% if is_tagged_in_post %}
+                            <button type="button" 
+                                    onclick="removeTagFromPost('{{ original_post.cuid }}')"
+                                    class="hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm">
+                                <span class="inline-flex items-center gap-2">
+                                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zM21 12h-6"></path>
+                                    </svg>
+                                    <span>Remove my tag</span>
+                                </span>
+                            </button>
+                        {% endif %}
+                        
+                        {# NEW: Remove Mention Option #}
+                        {% if is_mentioned_in_post %}
+                            <button type="button" 
+                                    onclick="removeMentionFromPost('{{ original_post.cuid }}')"
+                                    class="hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm">
+                                <span class="inline-flex items-center gap-2">
+                                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <span>Remove my @mention</span>
+                                </span>
+                            </button>
+                        {% endif %}
+                        
+                        {# NEW: Hide Post Option #}
+                        {% if show_hide_option %}
+                            <button type="button" 
+                                    onclick="hidePost('{{ original_post.cuid }}')"
+                                    class="hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm">
+                                <span class="inline-flex items-center gap-2">
+                                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+                                    </svg>
+                                    <span>Hide this post</span>
+                                </span>
+                            </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+        {# MODIFICATION END #}
+    </div>
+
+    {% if original_post.event and not original_post.content and not original_post.media_files %}
+        <div class="mt-4">
+            {% with event=original_post.event, current_user_puid=current_user_puid %}
+                {% include '_event_card.html' %}
+            {% endwith %}
+        </div>
+    {% else %}
+        {# Process content with @everyone styling for group/event posts #}
+        {% if original_post.group or original_post.event %}
+            {% set processed_content = original_post.content | default('', true) | linkify_mentions | linkify_urls %}
+            <p class="primary-text whitespace-pre-wrap">{{ processed_content | replace('@everyone', '<span class="font-bold text-orange-600 dark:text-orange-400">@everyone</span>') | replace('@all', '<span class="font-bold text-orange-600 dark:text-orange-400">@all</span>') | safe }}</p>
+        {% else %}
+            <p class="primary-text whitespace-pre-wrap">{{ original_post.content | default('', true) | linkify_mentions | linkify_urls | safe }}</p>
+        {% endif %}
+    {% endif %}
+
+    {# NEW: Poll Display #}
+    {% if original_post.poll %}
+        {% with post=original_post, poll=original_post.poll %}
+            {% include '_poll_display.html' %}
+        {% endwith %}
+    {% elif post.poll %}
+        {% with poll=post.poll %}
+            {% include '_poll_display.html' %}
+        {% endwith %}
+    {% endif %}
+
+    {# NEW: Link Preview Display #}
+    {% if original_post.link_previews %}
+        <div class="link-previews-container mt-3">
+            {% for preview in original_post.link_previews %}
+                {% include '_link_preview_card.html' %}
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {% if original_post.media_files %}
+        <div class="mt-2 media-grid {% if original_post.media_files|length > 1 %}grid-cols-2{% endif %}" id="media-grid-{{ post.cuid }}">
+            {% for media_file in original_post.media_files %}
+                {# Show first 4 photos by default, hide the rest #}
+                {% set is_hidden = loop.index > 4 %}
+                <a href="{{ url_for('main.view_media', muid=media_file.muid) }}" 
+                id="media-{{ media_file.muid }}" 
+                class="post-media-item-link {% if is_hidden %}extra-media hidden{% endif %}"
+                data-post-cuid="{{ post.cuid }}">
+                    {% set media_url = federated_media_url(original_post.author, media_file.media_file_path) %}
+                    <div class="post-media-item"
+                         data-media-id="{{ media_file.id }}"
+                         data-muid="{{ media_file.muid }}"
+                         data-media-url="{{ media_url }}"
+                         data-media-type="{% if media_file.media_file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')) %}image{% elif media_file.media_file_path.lower().endswith(('.mp4', '.mov', '.webm', '.avi', '.mkv')) %}video{% else %}other{% endif %}"
+                         data-alt-text="{{ media_file.alt_text | default('') }}"
+                         data-username="{{ original_post.author.username }}"
+                         data-puid="{{ original_post.author.puid }}"
+                         data-media-index="{{ loop.index0 }}"
+                         data-origin-hostname="{{ media_file.origin_hostname or '' }}">
+
+                        {% if media_file.media_file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')) %}
+                            {# Use thumbnails for all images - construct appropriate URL based on origin #}
+                            {% if media_file.origin_hostname and media_file.origin_hostname != config.get('NODE_HOSTNAME') %}
+                                {# Remote media - construct federated thumbnail URL #}
+                                {% set insecure_mode = config.get('FEDERATION_INSECURE_MODE', False) %}
+                                {% set protocol = 'http' if insecure_mode else 'https' %}
+                                {% set thumb_url = protocol ~ '://' ~ media_file.origin_hostname ~ '/thumbnails/' ~ original_post.author.puid ~ '/' ~ media_file.media_file_path %}
+                            {% else %}
+                                {# Local media - use local thumbnail route #}
+                                {% set thumb_url = url_for('main.serve_thumbnail',
+                                    puid=original_post.author.puid,
+                                    filename=media_file.media_file_path) %}
+                            {% endif %}
+                            <img src="{{ thumb_url }}"
+                                alt="Post Media"
+                                class="w-full h-full object-cover"
+                                loading="lazy"
+                                onerror="this.onerror=null; this.src='{{ media_url | e }}'">
+                        {% elif media_file.media_file_path.lower().endswith(('.mp4', '.mov', '.webm', '.avi', '.mkv')) %}
+                            <video preload="metadata" muted>
+                                <source src="{{ media_url }}#t=0.1" type="video/mp4">
+                                Your browser does not support the video tag.
+                            </video>
+                            <div class="play-icon">&#9658;</div>
+                        {% else %}
+                            <div class="w-full h-full flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-center text-xs">
+                                Unsupported Media
+                            </div>
+                        {% endif %}
+                    </div>
+                </a>
+            {% endfor %}
+                </div>
+                
+                {# Show More/Less buttons for photos #}
+                {% if original_post.media_files|length > 4 %}
+                    <div class="media-toggle-container mt-2" id="media-toggle-{{ post.cuid }}">
+                        <button type="button" 
+                                class="show-more-media-button text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                                onclick="App.MediaToggle.showMoreMedia('{{ post.cuid }}')"
+                                data-post-cuid="{{ post.cuid }}">
+                            Show {{ original_post.media_files|length - 4 }} more photo{% if original_post.media_files|length - 4 != 1 %}s{% endif %}
+                        </button>
+                        <button type="button" 
+                                class="show-less-media-button text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium hidden"
+                                onclick="App.MediaToggle.showLessMedia('{{ post.cuid }}')"
+                                data-post-cuid="{{ post.cuid }}">
+                            Show less
+                        </button>
+                    </div>
+                {% endif %}
+            {% endif %}
+    <!-- MODIFICATION: Changed to a flex-col container for Privacy and Comment Count -->
+    <div class="text-xs mt-2 flex flex-col">
+        <p class="secondary-text"> <!-- Privacy container -->
+            <span class="primary-text">Privacy:</span>
+            {% if original_post.privacy_setting == 'followers' %}
+                <span class="privacy-indicator privacy-followers">Followers</span>
+            {% elif original_post.privacy_setting == 'friends' %}
+                <span class="privacy-indicator privacy-friends">Friends</span>
+            {% elif original_post.privacy_setting == 'public' %}
+                <span class="privacy-indicator privacy-public">Public</span>
+            {% elif original_post.privacy_setting == 'local' %}
+                <span class="privacy-indicator privacy-local">Local</span>
+            {% elif original_post.privacy_setting == 'group' %}
+                <span class="privacy-indicator privacy-group">Group</span>
+            {# BUG FIX: Added 'event' privacy setting display. #}
+            {% elif original_post.privacy_setting == 'event' %}
+                <span class="privacy-indicator privacy-private"> Event Invitees</span>
+            {% else %}
+                {{ original_post.privacy_setting | capitalize }}
+            {% endif %}
+        </p>
+        
+    {# --- NEW: Comment Count (moved and resized) --- #}
+    <div class="text-xs mt-2 flex flex-col"> <!-- Removed text-gray-400 -->
+        {% set total_comments = post.comments | count_all_comments %}
+        <!-- MODIFICATION: Removed the opacity class -->
+        <p class="flex items-center text-sm mt-1 primary-text">
+            <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+            {% if total_comments > 0 %}
+                <span>{{ total_comments }}</span>
+            {% endif %}
+        </p>
+    </div>
+    {# --- END NEW --- #}
+
+    </div>
+
+    <!-- Comments Section -->
+    <div class="mt-6 border-t dark:border-gray-700 pt-4">
+        <h3 class="text-lg font-semibold primary-text mb-3">Comments</h3>
+        
+        <!-- MODIFICATION: START - Comment list moved *before* the add comment form -->
+        <div id="comments-container-{{ post.cuid }}">
+            {% if post.comments %}
+                <div class="space-y-4 comments-list">
+                {% for comment in post.comments %}
+                    {# *** MODIFICATION: Changed loop.index > 3 to loop.index > 1 *** #}
+                    {% set comment_classes = 'extra-comment hidden' if loop.index > 1 else '' %}
+                    
+                    <div class="{{ comment_classes }}">
+                    {# MODIFICATION: Pass is_viewer_group_moderator AND is_group_context to the comment template #}
+                    {# NEW: Pass comments_disabled status to the comment template #}
+                    {# NEW: Pass public page owner status #}
+                    {# NEW: Pass event context for @everyone styling #}
+                    {% set is_group_context = True if post.group else False %}
+                    {% set is_event_context = True if post.event else False %}
+                    {% set is_public_page_owner = (post.author.user_type == 'public_page' and post.author.puid == current_user_puid) %}
+                    {% with post_cuid=post.cuid, current_username=session.username, is_admin=session.get('is_admin'), post_owner_id=post.profile_user_id, current_user_id=current_user_id, is_viewer_group_moderator=is_viewer_group_moderator, is_group_context=is_group_context, is_event_context=is_event_context, comments_disabled=original_post.comments_disabled, is_public_page_owner=is_public_page_owner, friend_puids=friend_puids %}
+                        {% include '_comment_template.html' %}
+                    {% endwith %}
+                    </div>
+                {% endfor %}
+                </div>
+                {# *** MODIFICATION: Changed post.comments | length > 3 to > 1 *** #}
+                {% if post.comments | length > 1 %}
+                    <button type="button" 
+                            onclick="App.Comment.showMore(this, 'comments-container-{{ post.cuid }}', 'extra-comment')" 
+                            class="text-sm font-semibold text-blue-500 dark:text-blue-400 hover:underline mt-2 show-more-button">
+                        {# *** MODIFICATION: Updated button text logic *** #}
+                        {% set remaining_comments = post.comments | length - 1 %}
+                        View {{ remaining_comments }} more {{ 'comment' if remaining_comments == 1 else 'comments' }}
+                    </button>
+                {% endif %}
+            {% else %}
+                <p class="secondary-text">No comments yet.</p>
+            {% endif %}
+        </div>
+        <!-- MODIFICATION: END -->
+
+        {# NEW: Check if comments are disabled #}
+        {% if not original_post.comments_disabled %}
+            {% if session.get('username') or session.get('is_federated_viewer') %}
+                <form id="commentForm-{{ post.cuid }}" action="{{ url_for('comments.add_comment_route', post_cuid=post.cuid) }}" method="POST" class="mb-4 mt-4 border-t dark:border-gray-700 pt-4">
+                    <input type="hidden" name="parent_comment_id" class="parent-comment-id-input">
+                    <div class="replying-to-display text-sm secondary-text mb-1 hidden">
+                        Replying to <span class="font-semibold reply-to-username"></span>
+                        <button type="button" onclick="hideReplyForm('{{ post.cuid }}')" class="text-red-500 hover:text-red-700 ml-2 text-xs">Cancel</button>
+                    </div>
+                    <textarea name="comment_content" placeholder="Add a comment..." rows="2" class="w-full p-2 border rounded-md mb-2 form-input"></textarea>
+
+                    <div class="mb-2" flex gap-2>
+						<label for="comment-media-upload-{{ post.cuid }}" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-3 rounded-lg shadow-sm transition duration-300 ease-in-out cursor-pointer inline-flex items-center gap-2">
+							<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+								<path fill-rule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
+							</svg>
+							Upload Media
+						</label>
+						<input type="file" id="comment-media-upload-{{ post.cuid }}" accept="image/*,video/*" multiple class="hidden" onchange="handleCommentMediaUpload(event, '{{ post.cuid }}')">
+						
+                        <button type="button" onclick="openCommentMediaBrowser('{{ post.cuid }}', {{ 'true' if is_federated_viewer else 'false' }}, '{{ viewer_home_url }}')" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-3 rounded-lg shadow-sm transition duration-300 ease-in-out inline-flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-4 4 4 4-4V5h-2v4l-2-2-4 4-2-2-2 2z" clip-rule="evenodd"></path>
+                            </svg>
+                            Browse Media
+                        </button>
+                    </div>
+                    <div id="comment-media-preview-{{ post.cuid }}" class="flex flex-wrap gap-2 mb-2"></div>
+                    <input type="hidden" name="selected_comment_media_files" id="selected_comment_media_files-{{ post.cuid }}" value="[]">
+
+                    <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition duration-200 inline-flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clip-rule="evenodd"></path>
+                        </svg>
+                        Post Comment
+                    </button>
+                </form>
+            {% else %}
+                <p class="secondary-text mb-4 mt-4 border-t dark:border-gray-700 pt-4">Log in to add comments.</p>
+            {% endif %}
+        {% else %}
+            {# NEW: Show this message if comments are disabled #}
+            <div class="p-3 rounded-md bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-center mt-4 disabled-comment-box">
+                <p class="secondary-text font-medium text-sm">Comments are disabled for this post.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>

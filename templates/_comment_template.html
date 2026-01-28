@@ -1,0 +1,246 @@
+{# templates/_comment_template.html #}
+{# This template is intended to be included by index.html and user_profile.html #}
+{# It assumes 'comment', 'post_cuid', 'current_username', 'is_admin', 'post_owner_id', 'current_user_id', 'viewer_home_url', 'is_federated_viewer', 'current_user_puid', 'is_viewer_group_moderator', 'is_group_context', 'comments_disabled', 'is_public_page_owner', and 'is_event_creator' are available #}
+
+<div class="p-3 rounded-lg shadow-sm {% if comment.parent_comment_id %}comment-reply{% endif %} post-card" id="comment-{{ comment.cuid }}">
+    {# Header section with profile pic, name, timestamp, and options menu #}
+    <div class="flex justify-between items-start mb-2">
+        <div class="flex items-start gap-2 flex-1 min-w-0">
+            {# Profile Picture #}
+            <div class="w-10 h-10 rounded-full overflow-hidden border border-gray-300 dark:border-gray-600 flex-shrink-0">
+                {% if comment.profile_picture_path %}
+                    {% if comment.hostname %}
+                        {# For remote users, construct the full URL #}
+                        {% set insecure_mode = config.get('FEDERATION_INSECURE_MODE', False) %}
+                        {% set protocol = 'http' if insecure_mode else 'https' %}
+                        {% set profile_pic_url = protocol ~ '://' ~ comment.hostname ~ '/profile_pictures/' ~ comment.profile_picture_path %}
+                    {% else %}
+                        {# For local users #}
+                        {% set profile_pic_url = url_for('main.serve_profile_picture', filename=comment.profile_picture_path) %}
+                    {% endif %}
+                    <img src="{{ profile_pic_url }}" alt="Commenter Profile" class="w-full h-full object-cover" onerror="this.src='{{ url_for('static', filename='images/default_avatar.png') }}';">
+                {% else %}
+                    <svg class="w-full h-full text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                    </svg>
+                {% endif %}
+            </div>
+            
+            {# Name and timestamp container #}
+            <div class="flex-1 min-w-0">
+                <p class="text-sm">
+                    <a href="{{ federated_user_profile_url(comment) }}" class="name-link">{{ comment.display_name or comment.username }}</a>
+                </p>
+                <a href="{{ url_for('main.view_comment', cuid=comment.cuid) }}" class="hover:underline">
+                    <span class="text-xs secondary-text utc-timestamp" data-timestamp="{{ comment.timestamp }}">{{ comment.timestamp | format_timestamp }}</span>
+                </a>
+            </div>
+        </div>
+        
+        {# Options menu (3-dot button) #}
+        {% set is_comment_author = current_user_puid and current_user_puid == comment.puid %}
+        {% set can_edit_comment = (is_comment_author and not comments_disabled) or is_admin %}
+        {% set can_delete_comment = is_comment_author or is_admin or (is_viewer_group_moderator and is_group_context) or is_public_page_owner or is_event_creator %}
+        {% set show_friend_options = current_user_puid and comment.puid != current_user_puid and comment.puid in friend_puids %}
+        
+        {# Check if current user is mentioned #}
+        {% set is_mentioned_in_comment = false %}
+        {% if current_user_puid and comment.content %}
+            {% set viewer_user = get_user_by_puid(current_user_puid) %}
+            {% set user_display_name = (viewer_user.display_name or viewer_user.username) if viewer_user else '' %}
+            {% if user_display_name and ('@' + user_display_name.lower()) in comment.content.lower() %}
+                {% set is_mentioned_in_comment = true %}
+            {% endif %}
+        {% endif %}
+        
+        {% set show_hide_option = current_user_puid and current_user_puid != comment.puid %}
+
+        {% if can_edit_comment or can_delete_comment or show_friend_options or is_mentioned_in_comment or show_hide_option %}
+        <div class="relative flex-shrink-0">
+            <button onclick="toggleDropdown(event, 'comment-options-{{ comment.cuid }}')" type="button" class="inline-flex justify-center items-center px-2 py-1 rounded-md text-sm font-medium secondary-text hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
+                </svg>
+            </button>
+            <div class="dropdown-menu" id="comment-options-{{ comment.cuid }}" role="menu">
+                {% if can_edit_comment %}
+                <button type="button" onclick="openEditCommentModal('{{ comment.cuid }}', '{{ comment.content | js_string }}', '{{ comment.media_files | tojson | default('[]') | js_string }}', '{{ viewer_home_url }}', {{ 'true' if is_federated_viewer else 'false' }})" class="hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm" role="menuitem">
+                    <span class="inline-flex items-center gap-2">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
+                        <span>Edit</span>
+                    </span>
+                </button>
+                {% endif %}
+
+                {% if can_delete_comment %}
+                <form action="{{ url_for('comments.delete_comment_route', cuid=comment.cuid) }}" method="POST" onsubmit="event.preventDefault();">
+                    <button type="button" onclick="confirmFormSubmission(this.closest('form'), 'Are you sure you want to delete this comment? This action cannot be undone.')" class="text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm" role="menuitem">
+                        <span class="inline-flex items-center gap-2">
+                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                            <span>Delete</span>
+                        </span>
+                    </button>
+                </form>
+                {% endif %}
+                
+                {# Snooze and Block options for friend comments #}
+                {% if show_friend_options %}
+                    <form action="{% if viewer_home_url %}{{ viewer_home_url }}{{ url_for('friends.snooze_friend_route', puid=comment.puid) }}{% else %}{{ url_for('friends.snooze_friend_route', puid=comment.puid) }}{% endif %}" method="POST">
+                        <button type="submit" class="hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm" role="menuitem">
+                            <span class="inline-flex items-center gap-2">
+                                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.829a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M13 12a1 1 0 11-2 0 1 1 0 012 0z"></path>
+                                </svg>
+                                <span>Snooze {{ comment.display_name or comment.username }}</span>
+                            </span>
+                        </button>
+                    </form>
+                    <form action="{% if viewer_home_url %}{{ viewer_home_url }}{{ url_for('friends.block_friend_route', puid=comment.puid) }}{% else %}{{ url_for('friends.block_friend_route', puid=comment.puid) }}{% endif %}" method="POST" onsubmit="event.preventDefault();">
+                        <button type="button" onclick="confirmFormSubmission(this.closest('form'), 'Are you sure you want to block {{ comment.display_name or comment.username | js_string }}? You will no longer see their posts and comments, and they will not be able to interact with your content.')" class="text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm" role="menuitem">
+                            <span class="inline-flex items-center gap-2">
+                                <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                                    <path fill-rule="evenodd" 
+                                        d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" 
+                                        clip-rule="evenodd"/>
+                                </svg>
+                                <span>Block {{ comment.display_name or comment.username }}</span>
+                            </span>
+                        </button>
+                    </form>
+                {% endif %}
+                
+                {# Remove Mention Option #}
+                {% if is_mentioned_in_comment %}
+                    <button type="button" 
+                            onclick="removeMentionFromComment('{{ comment.cuid }}')"
+                            class="hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm" role="menuitem">
+                        <span class="inline-flex items-center gap-2">
+                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <span>Remove my @mention</span>
+                        </span>
+                    </button>
+                {% endif %}
+                
+                {# Hide Comment Option #}
+                {% if show_hide_option %}
+                    <button type="button" 
+                            onclick="hideComment('{{ comment.cuid }}')"
+                            class="hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm" role="menuitem">
+                        <span class="inline-flex items-center gap-2">
+                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+                            </svg>
+                            <span>Hide this comment</span>
+                        </span>
+                    </button>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    {# Content section - now OUTSIDE the header flex container, matching post layout #}
+    {# Process comment content with @everyone styling for group/event contexts #}
+    {% if is_group_context or is_event_context %}
+        {% set processed_content = comment.content | linkify_mentions | linkify_urls %}
+        <p class="primary-text whitespace-pre-wrap text-sm">{{ processed_content | replace('@everyone', '<span class="font-bold text-orange-600 dark:text-orange-400">@everyone</span>') | replace('@all', '<span class="font-bold text-orange-600 dark:text-orange-400">@all</span>') | safe }}</p>
+    {% else %}
+        <p class="primary-text whitespace-pre-wrap text-sm">{{ comment.content | linkify_mentions | linkify_urls | safe }}</p>
+    {% endif %}
+
+    <!-- Comment Media Display -->
+    {% if comment.media_files %}
+        <div class="comment-media-grid {% if comment.media_files|length > 1 %}grid-cols-2{% endif %} mt-2">
+            {% for media_file_data in comment.media_files %}
+                <a href="{{ url_for('main.view_media', muid=media_file_data.muid) }}" id="media-{{ media_file_data.muid }}" class="comment-media-item-link">
+                    <div class="comment-media-grid-item"
+                         data-media-id="{{ media_file_data.id }}"
+                         data-muid="{{ media_file_data.muid }}"
+                         data-media-url="{{ federated_media_url(comment, media_file_data.media_file_path) }}"
+                         data-media-type="{% if media_file_data.media_file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')) %}image{% elif media_file_data.media_file_path.lower().endswith(('.mp4', '.mov', '.webm', '.avi', '.mkv')) %}video{% else %}other{% endif %}"
+                         data-alt-text="{{ media_file_data.alt_text | default('') }}"
+                         data-username="{{ comment.username }}"
+                         data-puid="{{ comment.puid }}"
+                         data-comment-id="{{ comment.id }}">
+                        {% if media_file_data.media_file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')) %}
+                            {# Use thumbnails for all images #}
+                            {% set media_url = federated_media_url(comment, media_file_data.media_file_path) %}
+                            {# Check if comment author is remote to determine thumbnail location #}
+                            {% if comment.hostname and comment.hostname != config.get('NODE_HOSTNAME') %}
+                                {# Remote comment author - thumbnail is on their node #}
+                                {% set insecure_mode = config.get('FEDERATION_INSECURE_MODE', False) %}
+                                {% set protocol = 'http' if insecure_mode else 'https' %}
+                                {% set thumb_url = protocol ~ '://' ~ comment.hostname ~ '/thumbnails/' ~ comment.puid ~ '/' ~ media_file_data.media_file_path %}
+                            {% else %}
+                                {# Local comment author - use local thumbnail route #}
+                                {% set thumb_url = url_for('main.serve_thumbnail',
+                                    puid=comment.puid,
+                                    filename=media_file_data.media_file_path) %}
+                            {% endif %}
+                            <img src="{{ thumb_url }}"
+                                alt="Comment Media"
+                                class="w-full h-full object-cover"
+                                loading="lazy"
+                                onerror="this.onerror=null; this.src='{{ media_url | e }}'">
+                        {% elif media_file_data.media_file_path.lower().endswith(('.mp4', '.mov', '.webm', '.avi', '.mkv')) %}
+                            <video preload="metadata" muted>
+                                <source src="{{ federated_media_url(comment, media_file_data.media_file_path) }}#t=0.1" type="video/mp4">
+                                Your browser does not support the video tag.
+                            </video>
+                            <div class="play-icon">&#9658;</div>
+                        {% else %}
+                            <div class="w-full h-full flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-center text-xs">
+                                Unsupported Media
+                            </div>
+                        {% endif %}
+                    </div>
+                </a>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {# Link Preview Display #}
+    {% if comment.link_previews %}
+        <div class="link-previews-container mt-2">
+            {% for preview in comment.link_previews %}
+                {% include '_link_preview_card.html' %}
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {# Reply button #}
+    {% if (current_username or is_federated_viewer) and not comments_disabled %}
+        <button type="button" onclick="showReplyForm('{{ post_cuid }}', {{ comment.id }}, '{{ (comment.display_name or comment.username) | js_string }}')" class="text-blue-500 dark:text-blue-400 hover:underline text-xs mt-2">Reply</button>
+    {% endif %}
+</div>
+
+{# RECURSIVE INCLUDE for replies #}
+{% if comment.replies %}
+    <div class="replies-container" id="replies-container-{{ comment.cuid }}">
+        <div class="space-y-4 replies-list">
+        {% for reply in comment.replies %}
+            {% set reply_classes = 'extra-reply hidden' if loop.index > 1 else '' %}
+            <div class="{{ reply_classes }}">
+            {% with comment=reply, post_cuid=post_cuid, current_username=current_username, is_admin=is_admin, post_owner_id=post_owner_id, current_user_id=current_user_id, viewer_home_url=viewer_home_url, is_federated_viewer=is_federated_viewer, current_user_puid=current_user_puid, is_viewer_group_moderator=is_viewer_group_moderator, is_group_context=is_group_context, is_event_context=is_event_context, comments_disabled=comments_disabled, is_public_page_owner=is_public_page_owner, is_event_creator=is_event_creator, friend_puids=friend_puids %}
+                {% include '_comment_template.html' %}
+            {% endwith %}
+            </div>
+        {% endfor %}
+        </div>
+        
+        {% if comment.replies | length > 1 %}
+            <button type="button" 
+                    onclick="App.Comment.showMore(this, 'replies-container-{{ comment.cuid }}', 'extra-reply')" 
+                    class="text-xs font-semibold text-blue-500 dark:text-blue-400 hover:underline mt-1 ml-16 show-more-button">
+                {% set remaining_replies = comment.replies | length - 1 %}
+                View {{ remaining_replies }} more {{ 'reply' if remaining_replies == 1 else 'replies' }}
+            </button>
+        {% endif %}
+    </div>
+{% endif %}

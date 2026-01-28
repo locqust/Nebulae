@@ -1,0 +1,39 @@
+{# templates/_link_preview_card.html #}
+{# Displays a link preview card - used in both posts and comments #}
+{# Expects: preview (dict with url, title, description, image_url, site_name) #}
+
+{% if preview %}
+<a href="{{ preview.url }}" target="_blank" rel="noopener noreferrer" class="link-preview-card block border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden hover:border-gray-400 dark:hover:border-gray-500 transition-colors my-2 no-underline">
+    <div class="flex flex-nowrap">
+        {% if preview.image_url %}
+        <div class="link-preview-image flex-shrink-0" style="width: 120px; height: 120px;">
+            <img src="{{ preview.image_url }}" 
+                 alt="{{ preview.title or 'Link preview' }}" 
+                 class="w-full h-full object-cover"
+                 loading="lazy"
+                 onerror="this.parentElement.style.display='none'">
+        </div>
+        {% endif %}
+        <div class="link-preview-content flex-grow p-3 min-w-0 overflow-hidden">
+            {% if preview.site_name %}
+            <div class="text-xs text-gray-500 dark:text-gray-400 uppercase mb-1 truncate">
+                {{ preview.site_name }}
+            </div>
+            {% endif %}
+            {% if preview.title %}
+            <div class="font-semibold text-sm primary-text mb-1 line-clamp-2">
+                {{ preview.title }}
+            </div>
+            {% endif %}
+            {% if preview.description %}
+            <div class="text-xs text-gray-600 dark:text-gray-300 line-clamp-2 mb-1">
+                {{ preview.description }}
+            </div>
+            {% endif %}
+            <div class="text-xs text-gray-400 dark:text-gray-500 mt-1 truncate">
+                {{ preview.url }}
+            </div>
+        </div>
+    </div>
+</a>
+{% endif %}

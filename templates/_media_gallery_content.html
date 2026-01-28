@@ -1,0 +1,336 @@
+<!-- This file is a partial for SPA navigation. It only contains the main content. -->
+<!-- Flash Messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<div class="mb-4">
+{% for category, message in messages %}
+<div class="flash-message flash-{{ category }}">{{ message }}</div>
+{% endfor %}
+</div>
+{% endif %}
+{% endwith %}
+
+<!-- Wrapped content in a card for layout consistency -->
+<div>
+    <h1 class="text-3xl font-bold primary-text mb-6">My Media Gallery</h1>
+    
+    <!-- Filter Buttons (CSS in style.css, JS in script.js) -->
+    <div class="flex flex-wrap gap-2 mb-6">
+        <button onclick="filterMedia('all')" class="filter-button active" data-filter="all">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            Show All
+        </button>
+        <button onclick="filterMedia('photos')" class="filter-button" data-filter="photos">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            Photos
+        </button>
+        <button onclick="filterMedia('videos')" class="filter-button" data-filter="videos">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+            </svg>
+            Videos
+        </button>
+        <button onclick="filterMedia('tagged')" class="filter-button" data-filter="tagged">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+            </svg>
+            Tagged
+        </button>
+        <!-- NEW: Albums button -->
+        <button onclick="showAlbumsView()" class="filter-button px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" data-filter="albums">
+            <svg class="w-5 h-5 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+            </svg>
+            Albums
+        </button>
+    </div>
+
+    <!-- NEW: Albums container (hidden by default) -->
+    <div id="albums-container" class="hidden">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-2xl font-bold primary-text">Albums</h2>
+            <button onclick="openCreateAlbumModal()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                <svg class="w-5 h-5 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                Create Album
+            </button>
+        </div>
+        
+        <div id="albums-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <!-- Albums will be populated here via JS -->
+        </div>
+        
+        <!-- Single album view (shown when viewing album contents) -->
+        <div id="single-album-view" class="hidden">
+            <div class="mb-4">
+                <!-- Back button and album info -->
+                <div class="flex items-center gap-4 mb-4">
+                    <button onclick="backToAlbumsList()" class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                        </svg>
+                        <span class="hidden sm:inline">Back to Albums</span>
+                    </button>
+                    <div class="flex-1">
+                        <h2 class="text-2xl font-bold primary-text" id="current-album-title"></h2>
+                        <p class="text-sm secondary-text" id="current-album-description"></p>
+                    </div>
+                </div>
+                
+                <!-- Action buttons -->
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="openBulkAddMediaModal()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        <span class="hidden sm:inline">Add Media</span>
+                    </button>
+                    <button onclick="openEditAlbumModal()" class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
+                        <span class="hidden sm:inline">Edit Album</span>
+                    </button>
+                    <button onclick="deleteCurrentAlbum()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                        <span class="hidden sm:inline">Delete Album</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="album-media-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                <!-- Album media will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Existing media grid - wrap with id for toggling -->
+    <div id="media-grid-container">   
+    {% if all_media %}
+        {% set month_names = ['January', 'February', 'March', 'April', 'May', 'June', 
+                               'July', 'August', 'September', 'October', 'November', 'December'] %}
+        
+        {# Group by year first, then sort by year descending #}
+        {% for year, year_items in all_media|groupby('year')|reverse %}
+            <div class="year-section" data-year="{{ year }}">
+                <h2>{{ year }}</h2>
+                
+                {# Group by month within this year, then sort by month descending #}
+                {% for month, month_items in year_items|groupby('month')|reverse %}
+                    <h3>{{ month_names[month|int - 1] }}</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 month-grid" data-month="{{ month }}">
+                        
+                        {# Display media items - already in DESC order within each month #}
+                        {% for media_item in month_items %}
+                            <a href="{{ url_for('main.view_media', muid=media_item.muid) }}" 
+                               id="media-{{ media_item.muid }}" 
+                               class="gallery-media-item-link">
+                                {% set media_url = federated_media_url(media_item) %}
+                                <div class="relative w-full h-48 rounded-lg overflow-hidden shadow-md cursor-pointer gallery-media-item hover:opacity-90 transition-opacity"
+                                     data-media-id="{{ media_item.id }}"
+                                     data-muid="{{ media_item.muid }}"
+                                     data-media-url="{{ media_url }}"
+                                     data-media-type="{{ media_item.media_type }}"
+                                     data-alt-text="{{ media_item.alt_text | default('') }}"
+                                     data-username="{{ media_item.username }}"
+                                     data-puid="{{ media_item.puid }}"
+                                     data-is-tagged="{{ media_item.is_tagged_photo | default(0) }}">
+                                    {% if media_item.media_type == 'image' %}
+                                        {# Check if media is from a remote node #}
+                                        {% if media_item.origin_hostname and media_item.origin_hostname != config.get('NODE_HOSTNAME') %}
+                                            {# Remote media - use full URL directly, no thumbnail #}
+                                            <img src="{{ media_url }}"
+                                                alt="Post Media"
+                                                class="w-full h-full object-cover"
+                                                loading="lazy">
+                                        {% else %}
+                                            {# Local media - use thumbnail with fallback #}
+                                            {% set thumb_url = url_for('main.serve_thumbnail',
+                                              puid=media_item.puid,
+                                              filename=media_item.media_file_path) %}
+                                            <img src="{{ thumb_url }}"
+                                                alt="Post Media"
+                                                class="w-full h-full object-cover"
+                                                loading="lazy"
+                                                onerror="this.src='{{ media_url }}'">
+                                        {% endif %}
+                                    {% elif media_item.media_type == 'video' %}
+                                        <video preload="metadata" muted class="w-full h-full object-cover">
+                                            <source src="{{ media_url }}#t=0.1" type="video/mp4">
+                                            Your browser does not support the video tag.
+                                        </video>
+                                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                            <svg class="w-16 h-16 text-white opacity-75" fill="currentColor" viewBox="0 0 20 20">
+                                                <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"/>
+                                            </svg>
+                                        </div>
+                                    {% else %}
+                                        <div class="w-full h-full flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-center text-sm">
+                                            Unsupported Media
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </a>
+                        {% endfor %}
+                        
+                    </div> {# Close month grid #}
+                {% endfor %}
+                
+            </div> {# Close year section #}
+        {% endfor %}
+        
+    {% else %}
+        <div class="text-center py-12">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            <p class="mt-4 text-lg secondary-text">You have not posted any media yet.</p>
+        </div>
+    {% endif %}
+    </div>
+
+    </div>
+
+<!-- Create Album Modal -->
+<div id="create-album-modal" class="modal hidden">
+    <div class="modal-content max-w-md">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold primary-text">Create New Album</h3>
+            <button onclick="closeModal('create-album-modal')" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        
+        <form id="create-album-form" onsubmit="createAlbum(event)">
+            <div class="mb-4">
+                <label class="block text-sm font-medium secondary-text mb-2">Album Title</label>
+                <input type="text" id="album-title" required 
+                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 primary-text">
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium secondary-text mb-2">Description (optional)</label>
+                <textarea id="album-description" rows="3"
+                          class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 primary-text"></textarea>
+            </div>
+            
+            <div class="flex justify-end gap-2">
+                <button type="button" onclick="closeModal('create-album-modal')" 
+                        class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                    Cancel
+                </button>
+                <button type="submit" 
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                    Create Album
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Album Modal -->
+<div id="edit-album-modal" class="modal hidden">
+    <div class="modal-content max-w-md">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold primary-text">Edit Album</h3>
+            <button onclick="closeModal('edit-album-modal')" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        
+        <form id="edit-album-form" onsubmit="saveAlbumEdit(event)">
+            <div class="mb-4">
+                <label class="block text-sm font-medium secondary-text mb-2">Album Title</label>
+                <input type="text" id="edit-album-title" required 
+                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 primary-text">
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium secondary-text mb-2">Description (optional)</label>
+                <textarea id="edit-album-description" rows="3"
+                          class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 primary-text"></textarea>
+            </div>
+            
+            <div class="flex justify-end gap-2">
+                <button type="button" onclick="closeModal('edit-album-modal')" 
+                        class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                    Cancel
+                </button>
+                <button type="submit" 
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Bulk Add Media to Album Modal -->
+<div id="bulk-add-media-modal" class="modal hidden">
+    <div class="modal-content max-w-4xl">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold primary-text">Add Media to Album</h3>
+            <button onclick="closeModal('bulk-add-media-modal')" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        
+        <p class="text-sm secondary-text mb-4">Select media from your gallery to add to this album</p>
+        
+        <!-- Filter for media type -->
+        <div class="flex gap-2 mb-4">
+            <button onclick="filterBulkModalMedia('all')" class="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm active-modal-filter" data-filter="all">
+                All
+            </button>
+            <button onclick="filterBulkModalMedia('image')" class="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm" data-filter="image">
+                Photos
+            </button>
+            <button onclick="filterBulkModalMedia('video')" class="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm" data-filter="video">
+                Videos
+            </button>
+        </div>
+        
+        <!-- Media grid -->
+        <div id="bulk-media-selection-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-96 overflow-y-auto mb-4">
+            <!-- Will be populated with media items -->
+        </div>
+        
+        <div class="flex justify-between items-center">
+            <p class="text-sm secondary-text"><span id="bulk-selected-count">0</span> items selected</p>
+            <div class="flex gap-2">
+                <button onclick="closeModal('bulk-add-media-modal')" class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                    Cancel
+                </button>
+                <button onclick="addBulkSelectedMedia()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                    Add Selected
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+
+<script>
+    // Make viewer PUID available to JavaScript for album loading
+    {% if profile_user and profile_user.puid %}
+        window.viewer_puid = '{{ profile_user.puid }}';
+        window.isOwner = true;
+    {% else %}
+        console.error('Profile user PUID not available in template context');
+    {% endif %}
+</script>
+
+<!-- Note: CSS and JS loaded from centralized files -->
