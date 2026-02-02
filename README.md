@@ -70,7 +70,7 @@ Nebulae is a federated social networking platform designed as an alternative to 
 - A domain name or static IP address (for federation)
 - Basic familiarity with command line
 
-For detailed setup instructions, see DOCKER_SETUP.md.
+For detailed setup instructions, see [DOCKER_SETUP.md](DOCKER_SETUP.md).
 
 
 ## **🔧 Technology Stack**
