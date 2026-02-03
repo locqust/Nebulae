@@ -48,6 +48,7 @@ volumes:
 
 ### 5. Start Nebulae
 ```bash
+docker-compose pull
 docker-compose up -d
 ```
 
