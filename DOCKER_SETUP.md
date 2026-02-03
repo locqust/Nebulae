@@ -8,10 +8,9 @@
 
 ### 2. Download Configuration Files
 
-Download the production docker-compose file:
+Download the docker-compose file:
 ```bash
-wget https://raw.githubusercontent.com/locqust/Nebulae/main/docker-compose.production.yml -O docker-compose.yml
-wget https://raw.githubusercontent.com/locqust/Nebulae/main/.env.example -O .env
+wget https://raw.githubusercontent.com/locqust/Nebulae/main/docker-compose.yml -O docker-compose.yml
 ```
 
 ### 3. Configure Environment
@@ -19,8 +18,9 @@ wget https://raw.githubusercontent.com/locqust/Nebulae/main/.env.example -O .env
 Generate a secure secret key:
 ```bash
 python3 -c "import secrets; print(secrets.token_hex(32))"
-# Or just make up a random long string!
 ```
+
+**Or just make up a random long string!**
 
 Required settings:
 - `SECRET_KEY`: Use the generated key above
