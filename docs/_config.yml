@@ -1,3 +1,3 @@
-theme: jekyll-theme-time-machine
+remote_theme: just-the-docs/just-the-docs
 title: Nebulae Documentation
 description: Docs to help you build, run and manage a Nebulae node. As well as a guide for users.
