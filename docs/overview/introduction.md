@@ -7,10 +7,10 @@ Nebulae is a **privacy-focused, federated social media platform** designed to re
 ### The Problem We're Solving
 
 Modern social media has become:
-- **Algorithmically manipulated** - You don't control what you see
-- **Privacy-invasive** - Your data is collected, analyzed, and sold
-- **Engagement-driven** - Designed to addict rather than connect
-- **Centrally controlled** - Platforms can deplatform, censor, or change rules arbitrarily
+- Algorithmically manipulated: You don't control what you see
+- Privacy-invasive: Your data is collected, analyzed, and sold
+- Engagement-driven: Designed to addict rather than connect
+- Centrally controlled: Platforms can deplatform, censor, or change rules arbitrarily
 
 ### The Nebulae Solution
 
