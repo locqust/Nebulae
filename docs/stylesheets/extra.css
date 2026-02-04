@@ -1,0 +1,24 @@
+/* Custom styles for Nebulae Documentation */
+
+/* Make the logo bigger */
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 3rem !important;  /* Default is 1.5rem - this doubles it */
+  width: auto !important;
+  max-width: none !important;
+}
+
+/* Adjust header padding to accommodate larger logo */
+.md-header {
+  padding: 0.5rem 0.8rem !important;
+}
+
+/* Optional: Add a little space after the logo before the title */
+.md-header__title {
+  margin-left: 0.5rem;
+}
+
+/* Optional: Make the logo look better on dark mode */
+.md-header__button.md-logo img {
+  filter: drop-shadow(0 0 0.5rem rgba(0, 0, 0, 0.3));
+}
