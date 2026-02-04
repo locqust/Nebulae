@@ -26,10 +26,16 @@ We recommend changing your password after first login:
 
 1. Click your profile picture (top right)
 2. Go to **Settings**
-3. Navigate to **Security → Change Password**
-4. Enter your current password
+
+![Nebulae login page](/docs/assets/images/settings-icon.png)
+
+3. Navigate to **Account → Change Password**
+4. Enter your new password
 5. Enter your new password (twice)
-6. Click **Change Password**
+6. Enter your old password
+7. Click **Save Account Settings**
+
+![Nebulae login page](/docs/assets/images/password-change.png)
 
 ---
 
