@@ -7,6 +7,7 @@ Nebulae is a **privacy-focused, federated social media platform** designed to re
 ### The Problem We're Solving
 
 Modern social media has become:
+
 - Algorithmically manipulated: You don't control what you see
 - Privacy-invasive: Your data is collected, analyzed, and sold
 - Engagement-driven: Designed to addict rather than connect
@@ -17,24 +18,28 @@ Modern social media has become:
 Nebulae brings back social media as it should be:
 
 #### 🔒 Privacy First
+
 - Your data stays on your server
 - No tracking, no profiling, no data mining
 - Email addresses never exposed to remote nodes
 - You control who sees your content
 
 #### ⏰ Chronological, Always
+
 - Posts appear in time order
 - No algorithm deciding what you should see
 - See everything from friends, miss nothing
 - Pure, unmanipulated feed
 
 #### 🌐 Federated
+
 - Self-host your own instance
 - Connect with friends on other nodes
 - Maintain independence while staying connected
 - No single company controls the platform
 
 #### 👤 User Control
+
 - Granular privacy settings per post
 - Choose what crosses federation boundaries
 - Snooze, block, hide — you're in control
