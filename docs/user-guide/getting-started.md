@@ -13,8 +13,12 @@ Your administrator will provide you with:
 ### Logging In
 
 1. Navigate to your Nebulae instance (e.g., `https://nebulae.example.com`)
-2. Enter your username and password
-3. Click **Login**
+2. Click **Login**
+3. Enter your username and password
+4. Click **Log In**
+
+<img width="1915" height="909" alt="image" src="assets/images/login-screen.png" />
+
 
 ### Changing Your Password
 
