@@ -17,7 +17,7 @@ Your administrator will provide you with:
 3. Enter your username and password
 4. Click **Log In**
 
-<img width="1915" height="909" alt="image" src="assets/images/login-screen.png" />
+![Nebulae login page](assets/images/login-screen.png)
 
 
 ### Changing Your Password
