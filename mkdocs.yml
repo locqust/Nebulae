@@ -9,7 +9,7 @@ repo_url: https://github.com/locqust/Nebulae
 edit_uri: edit/main/docs/
 
 # Copyright
-copyright: Copyright &copy; 2024 Nebulae - AGPL-3.0 License
+copyright: Copyright &copy; 2026 Nebulae - AGPL-3.0 License
 
 # Theme Configuration
 theme:
@@ -133,4 +133,4 @@ extra:
   
   # Announcement bar (optional)
   # announcement:
-  #   content: "🎉 Nebulae v1.0 is now available! Check out the release notes."
+  #   content: "🎉 Nebulae v0.9.1.5-beta is now available! Check out the release notes."
