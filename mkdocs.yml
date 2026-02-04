@@ -1,0 +1,136 @@
+site_name: Nebulae Documentation
+site_url: https://locqust.github.io/Nebulae
+site_description: Privacy-focused, federated social media platform documentation
+site_author: Nebulae Team
+
+# Repository
+repo_name: locqust/Nebulae
+repo_url: https://github.com/locqust/Nebulae
+edit_uri: edit/main/docs/
+
+# Copyright
+copyright: Copyright &copy; 2024 Nebulae - AGPL-3.0 License
+
+# Theme Configuration
+theme:
+  name: material
+  language: en
+  palette:
+    # Light mode
+    - scheme: default
+      primary: blue
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - scheme: slate
+      primary: blue
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+  icon:
+    logo: material/cloud
+    repo: fontawesome/brands/github
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+
+# Navigation Structure
+nav:
+  - Home: index.md
+  - Overview:
+      - Introduction: overview/introduction.md
+      - Key Features: overview/features.md
+      - Architecture: overview/architecture.md
+      - Quick Start: overview/quick-start.md
+  - Admin Guide:
+      - Installation: admin-guide/installation.md
+      - User Management: admin-guide/user-management.md
+      - Federation Setup: admin-guide/federation-setup.md
+  - User Guide:
+      - Getting Started: user-guide/getting-started.md
+      - Groups: user-guide/groups.md
+
+# Extensions
+markdown_extensions:
+  # Python Markdown
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+      toc_depth: 3
+  
+  # Python Markdown Extensions
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+# Plugins
+plugins:
+  - search:
+      lang: en
+      separator: '[\s\-,:!=\[\]()"/]+|(?!\b)(?=[A-Z][a-z])|\.(?!\d)|&[lg]t;'
+  - minify:
+      minify_html: true
+
+# Extra CSS
+extra_css:
+  - stylesheets/extra.css
+
+# Extra JavaScript
+extra_javascript:
+  - javascripts/extra.js
+
+# Extra Configuration
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/locqust/Nebulae
+      name: Nebulae on GitHub
+  generator: false
+  
+  # Announcement bar (optional)
+  # announcement:
+  #   content: "🎉 Nebulae v1.0 is now available! Check out the release notes."
