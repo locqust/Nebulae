@@ -1,3 +1,84 @@
-remote_theme: just-the-docs/just-the-docs
+# Jekyll Configuration for Nebulae Documentation
+# Using Just the Docs theme - optimized for documentation
+# For GitLab Pages deployment
+
+# Site settings
 title: Nebulae Documentation
-description: Docs to help you build, run and manage a Nebulae node. As well as a guide for users.
+description: Privacy-focused, federated social media platform
+baseurl: "" 
+url: "https://locqust.gitlab.io" # Change to your GitLab Pages URL
+
+# Theme - Just the Docs is excellent for documentation
+remote_theme: just-the-docs/just-the-docs
+
+# Color scheme
+color_scheme: nebulae # or "dark" or "light"
+
+# Logo (optional)
+# logo: "/assets/images/nebulae-logo.png"
+
+# Search
+search_enabled: true
+search:
+  heading_level: 2
+  previews: 3
+  preview_words_before: 5
+  preview_words_after: 10
+  tokenizer_separator: /[\s/]+/
+  rel_url: true
+  button: false
+
+# Heading anchors
+heading_anchors: true
+
+# Aux links (top right)
+aux_links:
+  "GitHub":
+    - "https://github.com/locqust/Nebulae"
+
+# Footer content
+footer_content: "Copyright &copy; 2024 Nebulae. Distributed under the AGPL-3.0 License."
+
+# Navigation structure
+nav_external_links:
+  - title: GitHub Repository
+    url: https://github.com/locqust/Nebulae
+
+# Callouts (for warnings, notes, etc)
+callouts:
+  warning:
+    title: Warning
+    color: red
+  note:
+    title: Note
+    color: blue
+  important:
+    title: Important
+    color: yellow
+
+# Back to top link
+back_to_top: true
+back_to_top_text: "Back to top"
+
+# Build settings
+markdown: kramdown
+kramdown:
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    block:
+      line_numbers: true
+
+# Plugins
+plugins:
+  - jekyll-seo-tag
+  - jekyll-sitemap
+  - jekyll-feed
+
+# Exclude from processing
+exclude:
+  - README.md
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
+  - mkdocs.yml
