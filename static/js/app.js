@@ -2028,14 +2028,14 @@ App.Post = {
             if (isEventPost) {
                 options = [['Event Invitees Only', 'event']];
             } else if (isGroupPost) {
-                if (!requiresParentalApproval) {
+                // For group posts, check if current user requires parental approval
+                if (!currentUserRequiresParentalApproval) {
                     options.push(['Public', 'public']);
                 }
                 options.push(['Group Only', 'group']);
             } else if (isPublicPage) {
-                if (!requiresParentalApproval) {
-                    options.push(['Public', 'public']);
-                }
+                // For public page posts, always allow public since pages don't have parental controls
+                options.push(['Public', 'public']);
                 options.push(['Followers Only', 'followers']);
             } else {
                 if (!isFederated) options.push(['Local Only', 'local']);
