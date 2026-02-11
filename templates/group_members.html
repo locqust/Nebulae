@@ -125,7 +125,7 @@
                             </div>
                             {% if is_group_admin %}
                                 <div class="mt-4 text-center flex flex-col gap-4 justify-center w-full">
-                                    <form id="profilePictureUploadForm" action="{{ url_for('main.upload_profile_picture') }}" method="POST" enctype="multipart/form-data" class="flex flex-col items-center gap-2 w-full">
+                                    <form id="profilePictureUploadForm" action="{{ url_for('groups.upload_group_picture', puid=group.puid) }}" method="POST" enctype="multipart/form-data" class="flex flex-col items-center gap-2 w-full">
                                         <label for="profile_picture_file_input" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out cursor-pointer inline-flex items-center gap-2">
                                             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                                 <path fill-rule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>

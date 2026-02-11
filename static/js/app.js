@@ -2447,13 +2447,26 @@ App.Profile = {
                 App.Modal.open('cropperModal');
                 requestAnimationFrame(() => {
                     this._cropperInstance = new Cropper(imageEl, {
-                        aspectRatio: 1, viewMode: 2, dragMode: 'move',
-                        cropBoxMovable: true, cropBoxResizable: false,
-                        minCropBoxWidth: 100, minCropBoxHeight: 100,
-                        toggleDragModeOnDblclick: false, background: false,
-                        guides: false, center: false, highlight: false,
-                        autoCropArea: 0.8, responsive: true, scalable: true,
-                        zoomable: true, movable: true
+                        aspectRatio: 1, 
+                        viewMode: 1,  // Changed from 2 to 1 - allows zooming beyond container
+                        dragMode: 'move',
+                        cropBoxMovable: true, 
+                        cropBoxResizable: false,
+                        // REMOVED: minCropBoxWidth and minCropBoxHeight
+                        toggleDragModeOnDblclick: false, 
+                        background: false,
+                        guides: false, 
+                        center: false, 
+                        highlight: false,
+                        autoCropArea: 0.65,  // Reduced from 0.8 to start more zoomed out
+                        responsive: true, 
+                        scalable: true,
+                        zoomable: true, 
+                        movable: true,
+                        minContainerWidth: 200,  // Added to prevent excessive zoom out
+                        minContainerHeight: 200,
+                        zoomOnWheel: true,  // Enable mouse wheel zoom
+                        wheelZoomRatio: 0.1  // Smooth zoom increments
                     });
                 });
             };
@@ -5322,10 +5335,28 @@ App.Events = {
             imageEl.src = imageUrl;
             imageEl.onload = () => {
                 App.Modal.open('cropperModal');
-                this._cropperInstance = new Cropper(imageEl, {
-                    aspectRatio: 1, viewMode: 2, dragMode: 'move',
-                    cropBoxMovable: true, cropBoxResizable: false,
-                    toggleDragModeOnDblclick: false, autoCropArea: 0.8
+                requestAnimationFrame(() => {
+                    this._cropperInstance = new Cropper(imageEl, {
+                        aspectRatio: 1, 
+                        viewMode: 1,  // Changed from 2 - allows zooming beyond container
+                        dragMode: 'move',
+                        cropBoxMovable: true, 
+                        cropBoxResizable: false,
+                        toggleDragModeOnDblclick: false, 
+                        background: false,
+                        guides: false, 
+                        center: false, 
+                        highlight: false,
+                        autoCropArea: 0.65,  // Reduced from 0.8 to start more zoomed out
+                        responsive: true, 
+                        scalable: true,
+                        zoomable: true, 
+                        movable: true,
+                        minContainerWidth: 200,  // Prevent excessive zoom out
+                        minContainerHeight: 200,
+                        zoomOnWheel: true,  // Enable mouse wheel zoom
+                        wheelZoomRatio: 0.1  // Smooth zoom increments
+                    });
                 });
             };
             imageEl.onerror = () => App.Modal.showInfo('Failed to load image for adjustment.');
