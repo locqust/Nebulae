@@ -1,0 +1,193 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nebulae
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nebulae-config
+  namespace: nebulae
+data:
+  SECRET_KEY: "CHANGE_ME_GENERATE_A_SECRET_KEY"
+  NODE_HOSTNAME: "CHANGE_ME_TO_YOUR_HOSTNAME"
+  FEDERATION_INSECURE_MODE: "False"
+  FLASK_ENV: "production"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nebulae-data
+  namespace: nebulae
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: profile-pictures
+  namespace: nebulae
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: thumbnail-cache
+  namespace: nebulae
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nebulae
+  namespace: nebulae
+  labels:
+    app: nebulae
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nebulae
+  template:
+    metadata:
+      labels:
+        app: nebulae
+    spec:
+      containers:
+      - name: nebulae
+        image: ghcr.io/locqust/nebulae:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5000
+          name: http
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: nebulae-config
+        volumeMounts:
+        - name: nebulae-data
+          mountPath: /app/instance
+        - name: profile-pictures
+          mountPath: /app/profile_pictures_storage
+        - name: thumbnail-cache
+          mountPath: /app/thumbnails
+        # USER MEDIA MOUNTS - Add one pair per user
+        # Example format (uncomment and customize):
+        # - name: user-john-media
+        #   mountPath: /app/user_media/john_media
+        #   readOnly: true
+        # - name: user-john-uploads
+        #   mountPath: /app/user_uploads/john_uploads
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: nebulae-data
+        persistentVolumeClaim:
+          claimName: nebulae-data
+      - name: profile-pictures
+        persistentVolumeClaim:
+          claimName: profile-pictures
+      - name: thumbnail-cache
+        persistentVolumeClaim:
+          claimName: thumbnail-cache
+      # USER MEDIA VOLUMES - Must match volumeMounts above
+      # For local development/testing with hostPath:
+      # - name: user-john-media
+      #   hostPath:
+      #     path: /path/to/john/photos
+      #     type: Directory
+      # - name: user-john-uploads
+      #   hostPath:
+      #     path: /path/to/john/uploads
+      #     type: DirectoryOrCreate
+      #
+      # For production with NFS/network storage:
+      # - name: user-john-media
+      #   nfs:
+      #     server: nfs-server.example.com
+      #     path: /exports/john/photos
+      #     readOnly: true
+      # - name: user-john-uploads
+      #   nfs:
+      #     server: nfs-server.example.com
+      #     path: /exports/john/uploads
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nebulae
+  namespace: nebulae
+  labels:
+    app: nebulae
+spec:
+  type: ClusterIP
+  selector:
+    app: nebulae
+  ports:
+  - name: http
+    protocol: TCP
+    port: 5000
+    targetPort: 5000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nebulae
+  namespace: nebulae
+  annotations:
+    # For cert-manager with Let's Encrypt
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # For nginx ingress controller
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    # Uncomment if you need websockets support for future features
+    # nginx.ingress.kubernetes.io/websocket-services: "nebulae"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - nebulae.example.com  # CHANGE THIS to your domain
+    secretName: nebulae-tls
+  rules:
+  - host: nebulae.example.com  # CHANGE THIS to your domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nebulae
+            port:
+              number: 5000

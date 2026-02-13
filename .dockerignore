@@ -1,4 +1,55 @@
+# Documentation and setup guides
 DOCKER_SETUP.md
 README.md
+AI_SETUP_GUIDE.md
+
+# Documentation directory
 /docs
 mkdocs.yml
+
+# Alternative deployment methods
+kubernetes-manifest.yaml
+
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+.gitlab-ci.yml
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov
+
+# Environment files
+.env
+.env.local
+*.env
+
+# Node modules (if any frontend tooling)
+node_modules
+
+# Backup files
+*.bak
+*.backup
+
+# OS files
+.DS_Store
+Thumbs.db
