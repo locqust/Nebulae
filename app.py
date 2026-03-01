@@ -35,7 +35,7 @@ from routes.push_notifications import push_notifications_bp
 from routes.parental import parental_bp
 
 # Application version
-__version__ = "0.9.1.7-beta"
+__version__ = "0.9.3.0-beta"
 
 app = Flask(__name__)
 Compress(app)
