@@ -237,10 +237,27 @@ App.Modal = {
                     </div>
                 </div>
             </div>`;
+        const promptModalHTML = `
+            <div id="promptModal" class="modal hidden">
+                <div class="modal-content max-w-sm">
+                    <h2 id="promptModalTitle" class="text-xl font-bold mb-2 primary-text"></h2>
+                    <p id="promptModalMessage" class="text-sm secondary-text mb-4"></p>
+                    <input id="promptModalInput" type="text" maxlength="100"
+                           class="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 primary-text focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+                           placeholder="">
+                    <div class="flex justify-end gap-4">
+                        <button id="promptModalCancel" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg">Cancel</button>
+                        <button id="promptModalConfirm" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg">Save</button>
+                    </div>
+                </div>
+            </div>`;
+
         document.body.insertAdjacentHTML('beforeend', confirmModalHTML);
         document.body.insertAdjacentHTML('beforeend', infoModalHTML);
+        document.body.insertAdjacentHTML('beforeend', promptModalHTML);
 
         document.getElementById('confirmModalCancel').addEventListener('click', () => this.close('confirmModal'));
+        document.getElementById('promptModalCancel').addEventListener('click', () => this.close('promptModal'));
     },
     open(modalId) {
         const modal = document.getElementById(modalId);
@@ -324,6 +341,40 @@ App.Modal = {
             if (typeof onOk === 'function') onOk();
         }, { once: true });
         this.open('infoModal');
+    },
+    showPrompt(title, message, currentValue, onConfirm) {
+        const titleEl = document.getElementById('promptModalTitle');
+        const messageEl = document.getElementById('promptModalMessage');
+        const input = document.getElementById('promptModalInput');
+        const confirmBtn = document.getElementById('promptModalConfirm');
+        if (!titleEl || !input || !confirmBtn) {
+            // Fallback for safety
+            const result = prompt(message, currentValue || '');
+            if (result !== null && typeof onConfirm === 'function') onConfirm(result);
+            return;
+        }
+        titleEl.textContent = title;
+        if (messageEl) messageEl.textContent = message;
+        input.value = currentValue || '';
+
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+        newConfirmBtn.addEventListener('click', () => {
+            this.close('promptModal');
+            if (typeof onConfirm === 'function') onConfirm(input.value.trim());
+        }, { once: true });
+
+        // Also allow Enter key to submit
+        input.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                newConfirmBtn.click();
+            }
+        };
+
+        this.open('promptModal');
+        // Focus input after modal opens
+        setTimeout(() => input.focus(), 50);
     },
     showConfirm(message, onConfirm) {
         const messageEl = document.getElementById('confirmModalMessage');
@@ -578,6 +629,14 @@ App.Media = {
                         App.Profile.Cropper.updateFromBrowser(path);
                     }
                 }
+            },
+            'dmMedia': () => {
+                // Handled by the conversation page's own message/BroadcastChannel listener.
+                // This entry just silences the console.warn for unhandled mode.
+            },
+            'groupPic': () => {
+                // Handled by the conversation page's own message/BroadcastChannel listener.
+                // This entry just silences the console.warn for unhandled mode.
             }
         };
         
@@ -1611,6 +1670,12 @@ App.Router = {
             contentUrl: '/parental/api/page/dashboard',
             title: 'Parental Controls',
             modules: []
+        },
+        {
+            path: '/conversations/messages/',
+            contentUrl: '/conversations/api/page/messages',
+            title: 'Messages',
+            modules: [] // Will add conversations.js in Phase 5
         }
     ],
 
@@ -1645,23 +1710,18 @@ App.Router = {
         const matchingRoute = this.routes.find(r => r.path === initialPath);
         const initialContentUrl = window.appConfig.initialContentUrl; // Get URL from Flask
 
-        if (matchingRoute && initialContentUrl) {
+        if (matchingRoute) {
             // We are on a valid SPA page (like / or /friends/)
-            // and the server told us what content to load.
+            // Use initialContentUrl from server if provided, otherwise fall back to the route's contentUrl
+            const contentToLoad = initialContentUrl || matchingRoute.contentUrl;
             this.currentPage = initialPath;
-            // Load the content for this page, but don't push to history (it's the initial load)
-            this.loadContent(initialContentUrl, matchingRoute.title, matchingRoute.modules, false);
+            this.loadContent(contentToLoad, matchingRoute.title, matchingRoute.modules, false);
             this.updateActiveNavLink(initialPath);
         } else if (!matchingRoute && initialPath === '/') {
              // This is the case for a logged-out user at '/'
              // 'matchingRoute' is found, but 'initialContentUrl' is not provided by Flask.
              // The HTML is already rendered with the login prompt. We just set the page.
              this.currentPage = '/';
-        } else if (matchingRoute) {
-            // This is a logged-in user, but initialContentUrl is missing (e.g., on /login page)
-            // or an unknown path. Don't load anything.
-             console.log('Router: On matching route but no initial content URL. Assuming static page.');
-             this.currentPage = initialPath;
         } else {
             // This is a load on an unknown path.
             // Fallback to loading the main feed content at the root path.
@@ -4702,9 +4762,18 @@ App.NotificationPolling = {
             
             // Show toast notifications for new notifications
             if (data.new_notifications && data.new_notifications.length > 0) {
+                let hasParentalNotification = false;
                 data.new_notifications.forEach(notification => {
                     this.showNotificationToast(notification);
+                    if (notification.type === 'parental_approval_needed') {
+                        hasParentalNotification = true;
+                    }
                 });
+                
+                // If any parental approval notifications came in, refresh the sidebar badge
+                if (hasParentalNotification && App.Parental) {
+                    App.Parental.updateBadgeCount();
+                }
                 
                 // Update timestamp to now after processing new notifications
                 this.lastCheckTimestamp = new Date().toISOString();
@@ -4812,6 +4881,373 @@ App.NotificationPolling = {
             }
         }, 8000);
     }
+};
+
+/**
+ * @file modules/message_polling.js
+ * @description Polls for new messages, updates the header badge,
+ * shows toast notifications, and auto-refreshes the conversation view.
+ * Populates the App.MessagePolling namespace.
+ */
+App.MessagePolling = {
+    pollInterval: 10000, // Poll every 10 seconds (messages feel more urgent than notifications)
+    pollTimer: null,
+    lastCheckTimestamp: null,
+    isPolling: false,
+
+    init() {
+        this.lastCheckTimestamp = new Date().toISOString();
+        this.startPolling();
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                this.stopPolling();
+            } else {
+                this.lastCheckTimestamp = new Date().toISOString();
+                this.startPolling();
+                this.checkForNewMessages();
+            }
+        });
+    },
+
+    startPolling() {
+        if (this.isPolling) return;
+        this.isPolling = true;
+        this.pollTimer = setInterval(() => this.checkForNewMessages(), this.pollInterval);
+        console.log('Message polling started');
+    },
+
+    stopPolling() {
+        if (this.pollTimer) {
+            clearInterval(this.pollTimer);
+            this.pollTimer = null;
+        }
+        this.isPolling = false;
+    },
+
+    async checkForNewMessages() {
+        try {
+            const convUid = window.currentConversationUid || '';
+            const isConversationPage = !!convUid;
+            const url = `/conversations/api/messages/check_new?since_timestamp=${encodeURIComponent(this.lastCheckTimestamp)}${convUid ? '&conv_uid=' + convUid : ''}`;
+            const response = await fetch(url);
+
+            if (!response.ok) return;
+
+            const data = await response.json();
+
+            if (isConversationPage) {
+                // On the conversation page: only auto-refresh, no badge, no toasts
+                if (data.current_conv_has_new) {
+                    this.lastCheckTimestamp = new Date().toISOString();
+                    this.refreshConversation();
+                } else if (data.updated_messages && data.updated_messages.length > 0) {
+                    // Apply edits and deletes in-place without a full reload
+                    this.lastCheckTimestamp = new Date().toISOString();
+                    this.applyMessageUpdates(data.updated_messages);
+                }
+            } else {
+                // On SPA/header pages: update badge and show toasts
+                this.updateBadge(data.unread_count);
+                // Handle new message requests
+                if (data.pending_request_count !== undefined) {
+                    this.updateRequestsBadge(data.pending_request_count);
+                }
+                if (data.new_messages && data.new_messages.length > 0) {
+                    // Deduplicate by conv_uid so we only toast once per conversation per poll
+                    const seen = new Set();
+                    data.new_messages.forEach(msg => {
+                        if (!seen.has(msg.conv_uid)) {
+                            seen.add(msg.conv_uid);
+                            this.showMessageToast(msg);
+                        }
+                    });
+                    this.lastCheckTimestamp = new Date().toISOString();
+
+                    // If we're on the conversation LIST page, update it live
+                    this.refreshConversationListIfVisible(data.new_messages);
+                }
+            }
+        } catch (error) {
+            console.error('Error checking for new messages:', error);
+        }
+    },
+
+    updateBadge(count) {
+        const messagesLink = document.querySelector('a[data-route="/conversations/messages/"]');
+        if (!messagesLink) return;
+
+        let badge = document.getElementById('messages-badge');
+
+        if (count > 0) {
+            if (badge) {
+                badge.textContent = count;
+            } else {
+                badge = document.createElement('span');
+                badge.id = 'messages-badge';
+                badge.className = 'notification-badge';
+                badge.textContent = count;
+                messagesLink.appendChild(badge);
+            }
+        } else {
+            if (badge) badge.remove();
+        }
+    },
+    
+    // AFTER:
+    updateRequestsBadge(count) {
+        // If first poll, toast for any pre-existing pending requests too
+        // (the user may have received them before loading the page)
+        if (this._lastRequestCount === undefined) {
+            this._lastRequestCount = count;
+            if (count > 0) {
+                App.Toast.show(
+                    `You have ${count} pending message request${count > 1 ? 's' : ''}`,
+                    'info'
+                );
+            }
+            return;
+        }
+        const prev = this._lastRequestCount;
+        if (count > prev) {
+            // New request(s) came in — toast using same method as message toasts
+            const diff = count - prev;
+            this.showMessageToast({
+                sender_name: 'Message Request',
+                conv_name: null,
+                preview: `You have ${diff} new message request${diff > 1 ? 's' : ''}`,
+                url: '/conversations/messages/'
+            });
+        }
+        this._lastRequestCount = count;
+
+        // Update the messages badge to also reflect pending requests
+        const messagesLink = document.querySelector('a[data-route="/conversations/messages/"]');
+        if (!messagesLink) return;
+        const totalBadge = (parseInt(document.getElementById('messages-badge')?.textContent) || 0);
+        // The badge already shows unread_count — just ensure it doesn't go to 0 when requests exist
+        // We surface requests as a visual cue on the messages page itself (yellow badge in Quick Stats)
+    },
+
+    showMessageToast(msg) {
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+
+        const senderName = (msg.sender_name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const convName = (msg.conv_name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const preview = (msg.preview || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+        const toast = document.createElement('div');
+        toast.className = 'toast info';
+        toast.setAttribute('role', 'alert');
+        toast.style.cursor = 'pointer';
+
+        toast.innerHTML = `
+            <div class="toast-icon">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                </svg>
+            </div>
+            <div class="toast-content">
+                <div class="toast-message">💬 <strong>${senderName}</strong>${convName ? ` in <em>${convName}</em>` : ''}: ${preview}</div>
+            </div>
+            <button class="toast-close" aria-label="Close">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                </svg>
+            </button>
+        `;
+
+        const progress = document.createElement('div');
+        progress.className = 'toast-progress';
+        progress.style.animationDuration = '6000ms';
+        toast.appendChild(progress);
+
+        toast.addEventListener('click', (e) => {
+            if (e.target.closest('.toast-close')) return;
+            window.location.href = msg.url;
+        });
+
+        toast.querySelector('.toast-close').addEventListener('click', (e) => {
+            e.stopPropagation();
+            toast.classList.add('removing');
+            setTimeout(() => toast.remove(), 300);
+        });
+
+        container.appendChild(toast);
+
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.classList.add('removing');
+                setTimeout(() => toast.remove(), 300);
+            }
+        }, 6000);
+    },
+
+    refreshConversation() {
+        const container = document.getElementById('messagesContainer');
+        if (!container) return;
+        location.reload();
+    },
+
+    applyMessageUpdates(updatedMessages) {
+        updatedMessages.forEach(msg => {
+            const msgEl = document.getElementById('msg-' + msg.msg_uid);
+            if (!msgEl) return; // Message not in view (e.g. paginated out)
+
+            const bubbleCol = msgEl.querySelector('.flex.flex-col');
+            if (!bubbleCol) return;
+
+            if (msg.is_deleted) {
+                // Replace bubble with tombstone (same as local delete)
+                const normalBubble = bubbleCol.querySelector('.rounded-2xl');
+                if (normalBubble && !normalBubble.querySelector('.italic')) {
+                    const tombstone = document.createElement('div');
+                    tombstone.className = 'rounded-2xl px-4 py-2 bg-gray-100 dark:bg-gray-700 border border-dashed border-gray-300 dark:border-gray-500';
+                    tombstone.innerHTML = '<p class="text-sm italic text-gray-400 dark:text-gray-500">This message was deleted.</p>';
+                    normalBubble.replaceWith(tombstone);
+                    // Hide the 3-dot menu row
+                    const menuWrap = bubbleCol.querySelector('.relative.flex-shrink-0');
+                    if (menuWrap) menuWrap.remove();
+                }
+            } else if (msg.edited_at) {
+                // Update message content in-place
+                const bubble = msgEl.querySelector('.whitespace-pre-wrap');
+                if (bubble && bubble.textContent !== msg.content) {
+                    bubble.textContent = msg.content;
+                    // Add edited indicator if not already present
+                    if (!msgEl.querySelector('.edited-tag')) {
+                        const editedTag = document.createElement('p');
+                        editedTag.className = 'text-xs mt-1 text-blue-200 edited-tag';
+                        editedTag.textContent = '(edited)';
+                        bubble.parentElement.appendChild(editedTag);
+                    }
+                }
+            }
+        });
+    },
+
+    refreshConversationListIfVisible(newMessages) {
+        // Only act if the messages list is actually rendered in the SPA content area
+        const listContainer = document.querySelector('[data-page="messages-list"]');
+        if (!listContainer) return;
+
+        // For each conversation that has a new message, update its row in the DOM
+        const seen = new Set();
+        newMessages.forEach(msg => {
+            if (seen.has(msg.conv_uid)) return;
+            seen.add(msg.conv_uid);
+
+            // Find the conversation row by its conv_uid data attribute
+            const row = listContainer.querySelector(`[data-conv-uid="${msg.conv_uid}"]`);
+            if (!row) return;
+
+            // Update the preview text
+            const preview = row.querySelector('.conv-preview');
+            if (preview) {
+                preview.textContent = `${msg.sender_name}: ${msg.preview}`;
+            }
+
+            // Update or add the unread badge
+            let badge = row.querySelector('.conv-unread-badge');
+            if (badge) {
+                const current = parseInt(badge.textContent) || 0;
+                badge.textContent = current + 1;
+            } else {
+                // Badge doesn't exist yet — create and insert it
+                const nameRow = row.querySelector('.conv-name-row');
+                if (nameRow) {
+                    const newBadge = document.createElement('span');
+                    newBadge.className = 'conv-unread-badge ml-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full';
+                    newBadge.textContent = '1';
+                    nameRow.appendChild(newBadge);
+                }
+            }
+
+            // Bubble the conversation row to the top of the list
+            const list = listContainer.querySelector('.conv-list');
+            if (list && row.parentElement === list) {
+                list.prepend(row);
+            }
+        });
+
+        // Update the Quick Stats unread counter by the number of new conversations with messages
+        const quickStat = document.getElementById('quick-stat-unread');
+        if (quickStat) {
+            const current = parseInt(quickStat.textContent) || 0;
+            quickStat.textContent = current + seen.size;
+        }
+    },
+
+};
+
+
+App.startConversationWith = async function(targetPuid, triggerBtn) {
+    // Show loading state on the button
+    const btn = triggerBtn || null;
+    const originalHtml = btn ? btn.innerHTML : null;
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<svg class="w-4 h-4 animate-spin inline-block mr-1" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg> Sending...';
+    }
+
+    try {
+        const response = await fetch('/conversations/api/conversations/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_puids: [targetPuid] })
+        });
+        const data = await response.json();
+
+        console.log('startConversationWith response:', response.status, data);
+
+        if (data.status === 'pending_parental_approval') {
+            App.Toast.show(data.message || 'Awaiting parental approval before this conversation can start.', 'info');
+            if (btn) {
+                btn.innerHTML = '<svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> Pending Approval';
+                btn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                btn.classList.add('bg-yellow-600', 'cursor-default');
+            }
+        } else if (data.status === 'request_sent') {
+            App.Toast.show('Message request sent!', 'success');
+            if (btn) {
+                btn.innerHTML = '<svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Request Sent';
+                btn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                btn.classList.add('bg-green-600', 'cursor-default');
+            }
+        } else if (data.conv_uid) {
+            // Direct conversation — navigate (button stays in loading state, page changes)
+            const baseUrl = (window.appConfig?.isFederatedViewer && window.appConfig?.viewer_home_url)
+                ? window.appConfig.viewer_home_url
+                : '';
+            window.location.href = `${baseUrl}/conversations/messages/${data.conv_uid}`;
+        } else {
+            // Error
+            App.Toast.show(data.error || 'Could not start conversation.', 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        }
+    } catch (err) {
+        console.error('startConversationWith error:', err);
+        App.Toast.show('An error occurred.', 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    }
+};
+
+// Global wrapper — passes the button element directly, no querySelector needed
+window.startConversationWith = function(puid) {
+    const btn = event && event.currentTarget ? event.currentTarget : null;
+    App.startConversationWith(puid, btn);
+};
+
+window.closeDropdown = function(id) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
 };
 
 /**
@@ -5457,6 +5893,13 @@ App.Events = {
                 this._eventPostSearchTimeout = setTimeout(() => this.filterEventPosts(), 300);
             });
         }
+    },
+
+    openBirthdayPostModal(puid, displayName) {
+        document.getElementById('birthdayPostTargetPuid').value = puid;
+        document.getElementById('birthdayPostContent').value = 'Happy Birthday, ' + displayName + '! 🎂🎉';
+        document.getElementById('birthdayPostModal').classList.remove('hidden');
+        document.getElementById('birthdayPostContent').focus();
     },
 
     switchTab(tabId) {
@@ -6175,6 +6618,32 @@ App.Parental = {
                 });
             }
         );
+    },
+
+    denyAndBlockRequest(approvalId) {
+        if (!confirm('Deny this request and block the sender from contacting your child in future?')) return;
+        fetch(`/parental/deny_and_block/${approvalId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                App.Toast.show(data.error, 'error');
+            } else {
+                App.Toast.show(data.message || 'Request denied and sender blocked', 'success');
+                // Update badge count
+                this.updateBadgeCount();
+                // Reload the page content to refresh the list
+                setTimeout(() => {
+                    App.Router.navigate('/parental/');
+                }, 1500);
+            }
+        })
+        .catch(error => {
+            console.error('Error denying parental request and block:', error);
+            App.Toast.error('Failed to deny request and block');
+        });
     }
 };
 
@@ -6392,6 +6861,365 @@ App.Privacy = {
     }
 };
 
+/**
+ * @file modules/dm.js
+ * @description Handles Direct Messaging UI interactions.
+ * Populates the App.DM namespace.
+ */
+App.DM = {
+    _selectedPuids: [],
+    _friends: [],
+
+    /**
+     * Injects the DM friend picker modal into the DOM if not already present.
+     */
+    _ensureModal() {
+        if (document.getElementById('dm-friend-picker-modal')) return;
+
+        const modal = document.createElement('div');
+        modal.id = 'dm-friend-picker-modal';
+        modal.className = 'modal hidden';
+        modal.innerHTML = `
+            <div class="modal-content max-w-lg">
+                <span class="close-button" onclick="App.Modal.close('dm-friend-picker-modal')">&times;</span>
+                <h3 class="text-xl font-bold primary-text mb-4">New Message</h3>
+                <div class="mb-4">
+                    <input type="text"
+                           id="dm-friend-search"
+                           placeholder="Search friends..."
+                           oninput="App.DM._filterFriends()"
+                           class="w-full px-4 py-2 border rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 form-input">
+                </div>
+                <div id="dm-friends-list" class="overflow-y-auto max-h-96 mb-4">
+                    <div class="text-center secondary-text py-8">
+                        <p>Loading friends...</p>
+                    </div>
+                </div>
+                <div class="flex items-center justify-end gap-3">
+                    <button type="button"
+                            onclick="App.Modal.close('dm-friend-picker-modal')"
+                            class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 secondary-text">
+                        Cancel
+                    </button>
+                    <button type="button"
+                            onclick="App.DM._onSelectionDone()"
+                            class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+                        Done
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    },
+
+    /**
+     * Opens the DM friend picker modal.
+     */
+    openNewMessageModal() {
+        this._selectedPuids = [];
+        this._ensureModal();
+        App.Modal.open('dm-friend-picker-modal');
+
+        fetch('/friends/api/friends_list')
+            .then(r => {
+                if (!r.ok) throw new Error('Failed to load friends');
+                return r.json();
+            })
+            .then(data => {
+                this._friends = data.friends || [];
+                this._renderFriends(this._friends);
+            })
+            .catch(err => {
+                console.error('App.DM: Error loading friends list:', err);
+                const list = document.getElementById('dm-friends-list');
+                if (list) list.innerHTML = '<div class="text-center secondary-text py-8"><p class="text-red-500">Error loading friends. Please try again.</p></div>';
+            });
+    },
+
+    /**
+     * Renders the friends list with checkboxes.
+     */
+    _renderFriends(friends) {
+        const list = document.getElementById('dm-friends-list');
+        if (!list) return;
+
+        if (!friends || friends.length === 0) {
+            list.innerHTML = '<div class="text-center secondary-text py-8"><p>You have no friends to message yet!</p></div>';
+            return;
+        }
+
+        list.innerHTML = friends.map(friend => `
+            <div class="friend-item flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md"
+                 data-name="${(friend.display_name || '').toLowerCase()}">
+                <input type="checkbox"
+                       id="dm-friend-${friend.puid}"
+                       value="${friend.puid}"
+                       onchange="App.DM._toggleSelection('${friend.puid}')"
+                       class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+                ${friend.profile_picture_url
+                    ? `<img src="${friend.profile_picture_url}" alt="${friend.display_name}"
+                            class="w-10 h-10 rounded-full object-cover"
+                            onerror="this.src='/static/images/default_avatar.png'">`
+                    : `<svg class="w-10 h-10 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                       </svg>`
+                }
+                <label for="dm-friend-${friend.puid}" class="flex-1 cursor-pointer primary-text">
+                    ${friend.display_name}
+                </label>
+            </div>
+        `).join('');
+    },
+
+    /**
+     * Filters the friends list based on search input.
+     */
+    _filterFriends() {
+        const term = (document.getElementById('dm-friend-search')?.value || '').toLowerCase();
+        document.querySelectorAll('#dm-friends-list .friend-item').forEach(item => {
+            item.style.display = item.dataset.name.includes(term) ? 'flex' : 'none';
+        });
+    },
+
+    /**
+     * Toggles a friend in/out of the selection.
+     */
+    _toggleSelection(puid) {
+        const idx = this._selectedPuids.indexOf(puid);
+        if (idx > -1) {
+            this._selectedPuids.splice(idx, 1);
+        } else {
+            this._selectedPuids.push(puid);
+        }
+    },
+
+    async acceptMessageRequest(convUid) {
+        try {
+            const response = await fetch(`/conversations/api/message_requests/${convUid}/accept`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            });
+            if (response.ok) {
+                App.Toast.show('Message request accepted!', 'success');
+                App.Router.navigate('/conversations/messages/');
+            } else {
+                const err = await response.json().catch(() => ({}));
+                App.Toast.show(err.error || 'Failed to accept request', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            App.Toast.show('An error occurred', 'error');
+        }
+    },
+
+    async declineMessageRequest(convUid) {
+        try {
+            const response = await fetch(`/conversations/api/message_requests/${convUid}/decline`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            });
+            if (response.ok) {
+                App.Toast.show('Message request declined.', 'info');
+                App.Router.navigate('/conversations/messages/');
+            } else {
+                const err = await response.json().catch(() => ({}));
+                App.Toast.show(err.error || 'Failed to decline request', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            App.Toast.show('An error occurred', 'error');
+        }
+    },
+
+    async declineAndBlockMessageRequest(convUid, displayName) {
+        App.Modal.showConfirm(
+            `Decline the message request from ${displayName} and block them from messaging you in future?`,
+            async () => {
+                try {
+                    const response = await fetch(`/conversations/api/message_requests/${convUid}/decline_and_block`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'}
+                    });
+                    if (response.ok) {
+                        App.Toast.show(`${displayName} has been declined and blocked.`, 'info');
+                        App.Router.navigate('/conversations/messages/');
+                    } else {
+                        const err = await response.json().catch(() => ({}));
+                        App.Toast.show(err.error || 'Failed to decline and block', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    App.Toast.show('An error occurred', 'error');
+                }
+            }
+        );
+    },
+
+    /**
+     * Called when the user clicks Done — validates and starts conversation.
+     */
+    async _onSelectionDone() {
+        if (this._selectedPuids.length === 0) {
+            App.Toast.show('Please select at least one friend to message.', 'error');
+            return;
+        }
+
+        App.Modal.close('dm-friend-picker-modal');
+
+        try {
+            const response = await fetch('/conversations/api/conversations/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_puids: this._selectedPuids })
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.conv_uid) {
+                window.location.href = `/conversations/messages/${data.conv_uid}`;
+            } else {
+                App.Toast.show(data.error || 'Could not start conversation.', 'error');
+            }
+        } catch (err) {
+            console.error('App.DM: Error starting conversation:', err);
+            App.Toast.show('An error occurred. Please try again.', 'error');
+        } finally {
+            this._selectedPuids = [];
+        }
+    },
+
+    async toggleBlockFromGroupChat(puid, displayName, btn) {
+        const isBlocked = btn.dataset.blocked === 'true';
+        const action = isBlocked ? 'unblock' : 'block';
+        const confirmMsg = isBlocked
+            ? `Unblock ${displayName}? They will be able to send you message requests again.`
+            : `Block ${displayName} from sending you 1:1 message requests? They will not be notified.`;
+
+        App.Modal.showConfirm(confirmMsg, async () => {
+            try {
+                const url = isBlocked
+                    ? `/conversations/api/unblock/${puid}`
+                    : `/conversations/api/block/${puid}`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                if (response.ok) {
+                    const newBlocked = !isBlocked;
+                    btn.dataset.blocked = newBlocked ? 'true' : 'false';
+                    btn.title = newBlocked ? 'Unblock from DMs' : 'Block from DMs';
+                    btn.innerHTML = `
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                        </svg>
+                        ${newBlocked ? 'Unblock DMs' : 'Block DMs'}`;
+                    btn.style.color = newBlocked ? '#16a34a' : '#ea580c';
+                    App.Toast.show(
+                        isBlocked ? `${displayName} unblocked.` : `${displayName} blocked from DMs.`,
+                        isBlocked ? 'success' : 'info'
+                    );
+                } else {
+                    App.Toast.show('Action failed. Please try again.', 'error');
+                }
+            } catch (err) {
+                App.Toast.show('An error occurred.', 'error');
+            }
+        });
+    },
+
+    async showBlockedUsers() {
+        // Inject modal if needed
+        if (!document.getElementById('dm-blocked-users-modal')) {
+            const modal = document.createElement('div');
+            modal.id = 'dm-blocked-users-modal';
+            modal.className = 'modal hidden';
+            modal.innerHTML = `
+                <div class="modal-content max-w-lg">
+                    <span class="close-button" onclick="App.Modal.close('dm-blocked-users-modal')">&times;</span>
+                    <h3 class="text-xl font-bold primary-text mb-4">Blocked Users</h3>
+                    <p class="text-sm secondary-text mb-4">These users cannot send you message requests.</p>
+                    <div id="blocked-users-list" class="space-y-3 max-h-96 overflow-y-auto">
+                        <p class="text-center secondary-text py-4">Loading...</p>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        App.Modal.open('dm-blocked-users-modal');
+
+        try {
+            const response = await fetch('/conversations/api/blocked_users');
+            const data = await response.json();
+            const list = document.getElementById('blocked-users-list');
+
+            if (!data.blocked_users || data.blocked_users.length === 0) {
+                list.innerHTML = '<p class="text-center secondary-text py-4">No blocked users.</p>';
+                return;
+            }
+
+            list.innerHTML = data.blocked_users.map(user => {
+                const avatarHtml = user.profile_pic_url
+                    ? `<img src="${user.profile_pic_url}" alt="${user.display_name}"
+                            class="w-10 h-10 rounded-full object-cover"
+                            onerror="this.src='/static/images/default_avatar.png'">`
+                    : `<div class="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
+                           <svg class="w-6 h-6 text-gray-500 dark:text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                               <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                           </svg>
+                       </div>`;
+                const hostLabel = user.hostname ? `<span class="text-xs secondary-text">@${user.hostname}</span>` : '';
+                return `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <div class="flex items-center gap-3">
+                            ${avatarHtml}
+                            <div>
+                                <p class="font-semibold primary-text">${user.display_name}</p>
+                                ${hostLabel}
+                            </div>
+                        </div>
+                        <button onclick="App.DM.unblockUser('${user.puid}', '${user.display_name.replace(/'/g, "\\'")}', this)"
+                                class="bg-gray-200 hover:bg-red-500 hover:text-white dark:bg-gray-600 dark:text-gray-100 dark:hover:bg-red-600 dark:hover:text-white text-gray-800 px-3 py-1 rounded text-sm font-medium transition-colors">
+                            Unblock
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        } catch (err) {
+            console.error('Error loading blocked users:', err);
+            document.getElementById('blocked-users-list').innerHTML =
+                '<p class="text-center text-red-500 py-4">Failed to load blocked users.</p>';
+        }
+    },
+
+    async unblockUser(puid, displayName, btn) {
+        btn.disabled = true;
+        btn.textContent = 'Unblocking...';
+        try {
+            const response = await fetch(`/conversations/api/unblock/${puid}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            });
+            if (response.ok) {
+                btn.closest('.flex.items-center.justify-between').remove();
+                App.Toast.show(`${displayName} unblocked.`, 'success');
+                const list = document.getElementById('blocked-users-list');
+                if (list && list.children.length === 0) {
+                    list.innerHTML = '<p class="text-center secondary-text py-4">No blocked users.</p>';
+                }
+            } else {
+                btn.disabled = false;
+                btn.textContent = 'Unblock';
+                App.Toast.show('Failed to unblock user.', 'error');
+            }
+        } catch (err) {
+            btn.disabled = false;
+            btn.textContent = 'Unblock';
+            App.Toast.show('An error occurred.', 'error');
+        }
+    },
+};
+
 // Make functions globally available for onclick handlers
 window.removeTagFromPost = (postCuid) => App.Privacy.removeTag(postCuid);
 window.removeMentionFromPost = (postCuid) => App.Privacy.removeMentionFromPost(postCuid);
@@ -6499,10 +7327,18 @@ App.initCore = async function() {
             this.Toast.checkPending();
         }
         
-        // Initialize notification polling if on SPA page
-        if (window.appConfig && window.appConfig.isSpaPage === true) {
-            if (this.NotificationPolling && typeof this.NotificationPolling.init === 'function') {
-                this.NotificationPolling.init();
+        // Initialize notification and message polling on ALL pages (not just SPA)
+        // so toasts and badges work everywhere
+        if (this.NotificationPolling && typeof this.NotificationPolling.init === 'function') {
+            this.NotificationPolling.init();
+        }
+        if (this.MessagePolling && typeof this.MessagePolling.init === 'function') {
+            this.MessagePolling.init();
+        }
+        // Also start message polling on the conversation page (refresh-only mode, no badge/toast)
+        if (window.currentConversationUid) {
+            if (this.MessagePolling && typeof this.MessagePolling.init === 'function') {
+                this.MessagePolling.init();
             }
         }
 

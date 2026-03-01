@@ -43,6 +43,14 @@
                 </svg>
                 <span class="hidden sm:inline">Discover</span>
             </button>
+
+            {# Birthdays Tab #}
+            <button class="tab-button py-4 px-2 sm:px-1 text-center font-medium text-base sm:text-lg secondary-text hover:text-gray-700 dark:hover:text-gray-300 inline-flex items-center gap-2" onclick="App.Events.switchTab('birthdays')">
+                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 15.546c-.523 0-1.046.151-1.5.454a2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0A1.5 1.5 0 013 15.546V12a9 9 0 1118 0v3.546zM12 3v3m0 0c0 1.105-.895 2-2 2s-2-.895-2-2 .895-2 2-2 2 .895 2 2z"></path>
+                </svg>
+                <span class="hidden sm:inline">Birthdays</span>
+            </button>
             
             {# Past Events Tab #}
             <button class="tab-button py-4 px-2 sm:px-1 text-center font-medium text-base sm:text-lg secondary-text hover:text-gray-700 dark:hover:text-gray-300 inline-flex items-center gap-2" onclick="App.Events.switchTab('past')">
@@ -117,6 +125,110 @@
                 {% endfor %}
             {% else %}
                 <p id="no-discoverable-events-initial" class="text-center secondary-text py-8">There are no public events to discover right now.</p> {# Added ID here #}
+            {% endif %}
+        </div>
+
+        <!-- Upcoming Friend Birthdays -->
+        <div id="birthdays-content" class="tab-pane hidden">
+
+            {# Birthday post modal #}
+            <div id="birthdayPostModal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
+                <div class="post-card rounded-xl shadow-2xl w-full max-w-lg p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold primary-text">🎂 Wish them a Happy Birthday!</h3>
+                        <button onclick="document.getElementById('birthdayPostModal').classList.add('hidden')" class="secondary-text hover:text-gray-900 dark:hover:text-white text-2xl leading-none">&times;</button>
+                    </div>
+                    <form action="{{ url_for('main.create_post') }}" method="POST">
+                        <input type="hidden" name="profile_puid" id="birthdayPostTargetPuid" value="">
+                        <input type="hidden" name="privacy_setting" value="friends">
+                        <input type="hidden" name="selected_media_files" value="[]">
+                        <input type="hidden" name="next" value="{{ url_for('events.events_home') }}">
+                        <textarea name="content" id="birthdayPostContent" rows="4"
+                            class="w-full rounded-lg p-3 form-input text-sm mb-4 resize-none"
+                            placeholder="Write a birthday message..."></textarea>
+                        <div class="flex justify-end gap-3">
+                            <button type="button"
+                                onclick="document.getElementById('birthdayPostModal').classList.add('hidden')"
+                                class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition">
+                                Cancel
+                            </button>
+                            <button type="submit"
+                                class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg text-sm transition">
+                                Post 🎉
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            {% if friend_birthdays %}
+                {% set ns = namespace(current_month=None) %}
+                {% for birthday in friend_birthdays %}
+                    {% set month_key = birthday.next_birthday.strftime('%B %Y') %}
+                    {% if month_key != ns.current_month %}
+                        {% set ns.current_month = month_key %}
+                        <h2 class="text-lg font-semibold secondary-text mt-6 mb-2 first:mt-0 pb-1 border-b border-gray-200 dark:border-gray-700">
+                            🎂 {{ month_key }}
+                        </h2>
+                    {% endif %}
+
+                    {# Check if today is their birthday #}
+                    {% set is_today = (birthday.next_birthday.month == today.month and birthday.next_birthday.day == today.day) %}
+
+                    <div class="flex items-center gap-3 py-2 px-3 rounded-lg {% if is_today %}ring-2 ring-yellow-400 dark:ring-yellow-500 card-bg{% endif %}">
+
+                        {# Profile picture - exact same pattern as friends.html #}
+                        <div class="w-10 h-10 rounded-full overflow-hidden border border-gray-300 dark:border-gray-600 flex-shrink-0">
+                            {% if birthday.profile_picture_path %}
+                                {% set protocol = 'http' if config.get('FEDERATION_INSECURE_MODE', False) else 'https' %}
+                                {% if birthday.hostname %}
+                                    <img src="{{ protocol }}://{{ birthday.hostname }}/profile_pictures/{{ birthday.profile_picture_path }}"
+                                         alt="{{ birthday.display_name }}"
+                                         class="w-full h-full object-cover"
+                                         onerror="this.parentElement.innerHTML='<svg class=\'w-full h-full text-gray-500\' fill=\'currentColor\' viewBox=\'0 0 20 20\'><path fill-rule=\'evenodd\' d=\'M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z\' clip-rule=\'evenodd\'></path></svg>'">
+                                {% else %}
+                                    <img src="{{ url_for('main.serve_profile_picture', filename=birthday.profile_picture_path) }}"
+                                         alt="{{ birthday.display_name }}"
+                                         class="w-full h-full object-cover"
+                                         onerror="this.parentElement.innerHTML='<svg class=\'w-full h-full text-gray-500\' fill=\'currentColor\' viewBox=\'0 0 20 20\'><path fill-rule=\'evenodd\' d=\'M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z\' clip-rule=\'evenodd\'></path></svg>'">
+                                {% endif %}
+                            {% else %}
+                                <svg class="w-full h-full text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                                </svg>
+                            {% endif %}
+                        </div>
+
+                        {# Name + date #}
+                        <div class="flex-grow min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <a href="/user/{{ birthday.puid }}" class="font-semibold primary-text hover:underline truncate">
+                                    {{ birthday.display_name or birthday.username }}
+                                </a>
+                                {% if birthday.hostname %}
+                                    <span class="text-xs secondary-text">@{{ birthday.hostname }}</span>
+                                {% endif %}
+                                {% if is_today %}
+                                    <span class="text-xs font-semibold text-yellow-600 dark:text-yellow-400">🎉 Today!</span>
+                                {% endif %}
+                            </div>
+                            <p class="text-xs secondary-text">
+                                {{ birthday.next_birthday.strftime('%B %-d') }} &mdash; turning {{ birthday.age_turning }}
+                            </p>
+                        </div>
+
+                        {# Wish them button — only on their actual birthday #}
+                        {% if is_today %}
+                            <button onclick="App.Events.openBirthdayPostModal('{{ birthday.puid }}', '{{ (birthday.display_name or birthday.username) | replace("'", "\\'") }}')"
+                                class="flex-shrink-0 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-1 px-3 rounded-lg text-xs transition whitespace-nowrap">
+                                🎂 Wish them!
+                            </button>
+                        {% endif %}
+
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p class="text-center secondary-text py-8">No friend birthdays coming up — either your friends are immortal or keeping their date of birth a mystery! 🎂</p>
             {% endif %}
         </div>
 

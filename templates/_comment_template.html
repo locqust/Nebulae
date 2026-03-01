@@ -42,6 +42,8 @@
         {% set can_edit_comment = (is_comment_author and not comments_disabled) or is_admin %}
         {% set can_delete_comment = is_comment_author or is_admin or (is_viewer_group_moderator and is_group_context) or is_public_page_owner or is_event_creator %}
         {% set show_friend_options = current_user_puid and comment.puid != current_user_puid and comment.puid in friend_puids %}
+        {# Show 'Message' option for any non-owner logged-in user (anyone you can see their post) #}
+        {% set show_message_option = current_user_puid and comment.puid != current_user_puid %}
         
         {# Check if current user is mentioned #}
         {% set is_mentioned_in_comment = false %}
@@ -111,6 +113,20 @@
                             </span>
                         </button>
                     </form>
+                {% endif %}
+
+                {# Message author option #}
+                {% if show_message_option %}
+                <button type="button"
+                        onclick="closeDropdown('comment-options-{{ comment.cuid }}'); startConversationWith('{{ comment.puid }}')"
+                        class="hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm" role="menuitem">
+                    <span class="inline-flex items-center gap-2">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-3 3v-3z"></path>
+                        </svg>
+                        <span>Message {{ comment.display_name or comment.username }}</span>
+                    </span>
+                </button>
                 {% endif %}
                 
                 {# Remove Mention Option #}

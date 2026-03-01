@@ -14,6 +14,9 @@ import traceback
 import sys
 from itsdangerous import URLSafeTimedSerializer
 from flask_compress import Compress
+from routes.conversations import conversations_bp
+
+
 
 # Import database functions and utilities
 from db import get_db, close_db, init_db
@@ -171,18 +174,19 @@ def inject_user_data_functions():
     is_parent = False
     pending_approvals_count = 0
     
+    unread_messages_count = 0  # ← add this initialisation next to unread_notifications = 0
+
     if session.get('is_federated_viewer'):
-        # For federated viewers, their settings are passed in the session
-        # and override the defaults. Notifications are not applicable.
         federated_settings = session.get('federated_viewer_settings')
         if federated_settings:
             user_settings.update(federated_settings)
     elif 'username' in session:
-        # For local users, get their specific settings and notifications
         user_id = get_user_id_by_username(session['username'])
         if user_id:
             unread_notifications = get_unread_notification_count(user_id)
             user_settings = get_user_settings(user_id)
+            from db_queries.conversations import get_unread_conversation_count_for_user
+            unread_messages_count = get_unread_conversation_count_for_user(user_id)
 
             # NEW: Check if user is a parent
             from db_queries.parental_controls import get_children_for_parent, get_pending_approvals_count_for_parent
@@ -442,6 +446,7 @@ def inject_user_data_functions():
         get_user_by_id=get_user_by_id,
         get_user_by_puid=get_user_by_puid,  # NEW: For tagged users lookup
         unread_notification_count=unread_notifications,
+        unread_messages_count=unread_messages_count,
         federated_user_profile_url=federated_user_profile_url,
         federated_media_url=federated_media_url,
         federated_group_profile_url=federated_group_profile_url,
@@ -594,6 +599,7 @@ app.register_blueprint(discovery_filters_bp)
 app.register_blueprint(polls_bp)
 app.register_blueprint(two_factor_bp)
 app.register_blueprint(parental_bp)
+app.register_blueprint(conversations_bp, url_prefix='/conversations')
 
 @app.route('/offline')
 def offline():

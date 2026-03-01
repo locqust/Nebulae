@@ -47,6 +47,7 @@ from db_queries.media import (add_media_tags, remove_media_tag, get_media_tags,
                               update_media_comment, delete_media_comment, 
                               hide_media_comment_for_user, get_comment_media_details_by_muid)
 from db_queries.notifications import get_unread_notification_count
+from db_queries.conversations import get_unread_message_count_for_user
 
 main_bp = Blueprint('main', __name__)
 
@@ -103,6 +104,11 @@ def index():
     # Add to context
     current_user_requires_parental_approval = requires_parental_approval(current_user_id) if current_user_id else False
 
+     # Get unread messages count for header badge
+    unread_messages_count = 0
+    if current_user_id:  # Only for logged-in users
+        unread_messages_count = get_unread_message_count_for_user(current_user_id)
+
     return render_template('index.html',
                            username=current_username,
                            # posts=posts, # Posts are no longer passed here
@@ -113,6 +119,7 @@ def index():
                            viewer_home_url=viewer_home_url,
                            viewer_puid_for_js=viewer_puid_for_js,
                            initial_content_url=initial_content_url,
+                           unread_messages_count=unread_messages_count,
                            current_user_requires_parental_approval=current_user_requires_parental_approval)
 
 
@@ -1076,7 +1083,8 @@ def create_post():
     
     if requires_parental_approval(current_user['id']) and privacy_setting == 'public':
         flash('You cannot create public posts while parental controls are active.', 'warning')
-        return redirect(request.referrer or url_for('main.index'))
+        next_url = request.form.get('next')
+        return redirect(next_url or request.referrer or url_for('main.index'))
 
     # PARENTAL CONTROL CHECK: Prevent friends from making public posts on parental-controlled profiles
     if profile_user_id and profile_user_id != current_user['id']:
@@ -1944,6 +1952,73 @@ def public_page_profile(puid):
     if not profile_user or profile_user['user_type'] != 'public_page':
         flash('Public page not found.', 'danger')
         return redirect(url_for('main.index'))
+
+    # FEDERATION: Redirect local users to the remote node when viewing a remote public page
+    current_viewer_is_local = 'username' in session and not session.get('is_federated_viewer')
+    if profile_user.get('hostname') and current_viewer_is_local:
+        local_viewer = get_user_by_username(session['username'])
+        remote_hostname = profile_user['hostname']
+        node = get_node_by_hostname(remote_hostname)
+
+        if not node or not node['shared_secret']:
+            flash(f'Cannot view remote page: Your node is not securely connected to {remote_hostname}.', 'danger')
+            return redirect(request.referrer or url_for('main.index'))
+
+        try:
+            insecure_mode = current_app.config.get('FEDERATION_INSECURE_MODE', False)
+            verify_ssl = not insecure_mode
+
+            token_request_url = get_remote_node_api_url(
+                remote_hostname,
+                '/federation/api/v1/request_viewer_token',
+                insecure_mode
+            )
+
+            local_viewer_settings = get_user_settings(local_viewer['id'])
+
+            payload = {
+                'viewer_puid': local_viewer['puid'],
+                'target_puid': puid,
+                'viewer_settings': local_viewer_settings
+            }
+            request_body = json.dumps(payload, sort_keys=True).encode('utf-8')
+
+            signature = hmac.new(
+                node['shared_secret'].encode('utf-8'),
+                msg=request_body,
+                digestmod=hashlib.sha256
+            ).hexdigest()
+
+            headers = {
+                'X-Node-Hostname': current_app.config.get('NODE_HOSTNAME'),
+                'X-Node-Signature': signature,
+                'Content-Type': 'application/json'
+            }
+
+            response = requests.post(token_request_url, data=request_body, headers=headers, timeout=10,
+                                    verify=verify_ssl)
+            response.raise_for_status()
+
+            token_data = response.json()
+            new_viewer_token = token_data.get('viewer_token')
+
+            if not new_viewer_token:
+                raise Exception("Failed to retrieve a viewer token from the remote node.")
+
+            remote_page_url = get_remote_node_api_url(
+                remote_hostname,
+                f"/page/{puid}",
+                insecure_mode
+            )
+            return redirect(f"{remote_page_url}?viewer_token={new_viewer_token}")
+
+        except requests.exceptions.RequestException as e:
+            flash(f"Error connecting to remote node: {e}", "danger")
+            return redirect(request.referrer or url_for('main.index'))
+        except Exception as e:
+            flash(f"An error occurred while trying to view the remote page: {e}", "danger")
+            traceback.print_exc()
+            return redirect(request.referrer or url_for('main.index'))
 
     current_viewer_id = None
     viewer_is_admin = False

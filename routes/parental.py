@@ -182,6 +182,45 @@ def get_parental_dashboard_content():
                                 approval['target_profile_picture_url'] = url_for('main.serve_profile_picture', filename=sender_user['profile_picture_path'])
                             else:
                                 approval['target_profile_picture_url'] = url_for('static', filename='images/default_avatar.png')
+
+                # Fetch sender info for INCOMING DM requests
+                elif approval['approval_type'] == 'dm_start_in':
+                    sender_puid = approval['target_puid']  # stored directly on the approval record
+                    if sender_puid:
+                        sender_user = get_user_by_puid(sender_puid)
+                        if sender_user:
+                            approval['target_user'] = sender_user
+                            # Fall back to request_data if DB stub has no pic yet
+                            pic_path = sender_user.get('profile_picture_path') or \
+                                       approval['request_data_parsed'].get('sender_profile_picture_path')
+                            hostname = sender_user.get('hostname')
+                            if hostname and pic_path:
+                                insecure_mode = current_app.config.get('FEDERATION_INSECURE_MODE', False)
+                                protocol = 'http' if insecure_mode else 'https'
+                                approval['target_profile_picture_url'] = f"{protocol}://{hostname}/profile_pictures/{pic_path}"
+                            elif pic_path:
+                                approval['target_profile_picture_url'] = url_for('main.serve_profile_picture', filename=pic_path)
+                            else:
+                                approval['target_profile_picture_url'] = url_for('static', filename='images/default_avatar.png')
+
+                # Fetch recipient info for OUTGOING DM requests
+                elif approval['approval_type'] == 'dm_start_out':
+                    target_puid = approval['target_puid']  # stored directly on the approval record
+                    if target_puid:
+                        target_user = get_user_by_puid(target_puid)
+                        if target_user:
+                            approval['target_user'] = target_user
+                            pic_path = target_user.get('profile_picture_path') or \
+                                       approval['request_data_parsed'].get('target_profile_picture_path')
+                            hostname = target_user.get('hostname')
+                            if hostname and pic_path:
+                                insecure_mode = current_app.config.get('FEDERATION_INSECURE_MODE', False)
+                                protocol = 'http' if insecure_mode else 'https'
+                                approval['target_profile_picture_url'] = f"{protocol}://{hostname}/profile_pictures/{pic_path}"
+                            elif pic_path:
+                                approval['target_profile_picture_url'] = url_for('main.serve_profile_picture', filename=pic_path)
+                            else:
+                                approval['target_profile_picture_url'] = url_for('static', filename='images/default_avatar.png')
                         
             except (ValueError, TypeError) as e:
                 print(f"DEBUG: Error parsing request_data: {e}")
@@ -515,7 +554,57 @@ def approve_request_route(approval_id):
             # Notify child that the tag was approved
             create_notification(child_user['id'], user['id'], 'parental_approval_approved')
             return jsonify({'message': 'Post tag approved'}), 200
-            
+
+        elif approval['approval_type'] == 'dm_start_out':
+            # Child wants to start a DM with a remote user — now approved, actually create it
+            from db_queries.conversations import get_or_create_conversation_between_users, create_message_request, conversation_requires_request
+            from db_queries.users import get_user_by_puid
+            import json as _json
+
+            request_data_parsed = _json.loads(approval['request_data'])
+            target_puid = approval['target_puid']
+            target_user = get_user_by_puid(target_puid)
+            if not target_user:
+                return jsonify({'error': 'Target user no longer found'}), 404
+
+            participant_ids = [child_user['id'], target_user['id']]
+            conversation = get_or_create_conversation_between_users(participant_ids)
+            if not conversation:
+                return jsonify({'error': 'Failed to create conversation'}), 500
+
+            # Still needs a message request if not friends
+            if conversation_requires_request(child_user['id'], target_user['id']):
+                create_message_request(conversation['id'], child_user['id'], target_user['id'])
+                return jsonify({'message': 'DM approved — message request sent to recipient'}), 200
+
+            return jsonify({'message': 'DM conversation approved and created'}), 200
+
+        elif approval['approval_type'] == 'dm_start_in':
+            # Someone tried to message child — now approved, allow the message request through
+            from db_queries.conversations import get_conversation_by_conv_uid, create_message_request
+            from db_queries.users import get_user_by_puid
+            import json as _json
+
+            request_data_parsed = _json.loads(approval['request_data'])
+            conv_uid = request_data_parsed.get('conv_uid')
+            sender_puid = approval['target_puid']
+
+            sender = get_user_by_puid(sender_puid)
+            if not sender:
+                return jsonify({'error': 'Sender no longer found'}), 404
+
+            conversation = get_conversation_by_conv_uid(conv_uid) if conv_uid else None
+            if not conversation:
+                # Recreate if the pending conversation got cleaned up
+                from db_queries.conversations import get_or_create_conversation_between_users
+                conversation = get_or_create_conversation_between_users([child_user['id'], sender['id']])
+
+            if conversation:
+                create_message_request(conversation['id'], sender['id'], child_user['id'])
+                return jsonify({'message': 'Incoming DM approved — message request delivered'}), 200
+
+            return jsonify({'error': 'Could not process incoming DM approval'}), 500
+
         elif approval['approval_type'] == 'media_tag':
             # Approve a media tag - add child to tagged users and create notification
             request_data_parsed = json.loads(approval['request_data'])
@@ -623,10 +712,58 @@ def deny_request_route(approval_id):
                 # Notify remote node that the request was rejected
                 notify_remote_node_of_rejection(sender_user, child_user)
         
+        elif approval['approval_type'] == 'dm_start_in':
+            from db_queries.users import get_user_by_puid as _get_user_by_puid
+            from utils.federation_utils import notify_remote_node_of_dm_request_declined
+            import json as _json
+            sender_puid = approval['target_puid']
+            sender_user = _get_user_by_puid(sender_puid)
+            if sender_user and sender_user.get('hostname'):
+                request_data_parsed = _json.loads(approval['request_data'])
+                conv_uid = request_data_parsed.get('conv_uid')
+                child_user = get_user_by_id(approval['child_user_id'])
+                if child_user and conv_uid:
+                    notify_remote_node_of_dm_request_declined(child_user, sender_user, conv_uid)
+
         return jsonify({'message': 'Request denied'}), 200
     else:
         return jsonify({'error': 'Failed to deny request'}), 500
-    
+
+@parental_bp.route('/parental/deny_and_block/<int:approval_id>', methods=['POST'])
+def deny_and_block_request_route(approval_id):
+    """Denies a parental approval request AND blocks the remote sender from future DMs."""
+    if 'username' not in session:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    user = get_user_by_username(session['username'])
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    approval = get_approval_request_by_id(approval_id)
+    if not approval:
+        return jsonify({'error': 'Approval request not found'}), 404
+
+    parent_id = get_parent_user_id(approval['child_user_id'])
+    if parent_id != user['id']:
+        return jsonify({'error': 'You do not have authority over this child'}), 403
+
+    if not deny_request(approval_id, user['id']):
+        return jsonify({'error': 'Failed to deny request'}), 500
+
+    # Notify child
+    create_notification(approval['child_user_id'], user['id'], 'parental_approval_denied')
+
+    # Block the sender from DMing the child
+    if approval['approval_type'] in ('dm_start_in',):
+        from db_queries.users import get_user_by_puid
+        from db_queries.conversations import block_user_from_dms
+        child_user = get_user_by_id(approval['child_user_id'])
+        sender = get_user_by_puid(approval['target_puid'])
+        if child_user and sender:
+            block_user_from_dms(child_user['id'], sender['id'])
+
+    return jsonify({'message': 'Request denied and sender blocked'}), 200
+
 @parental_bp.route('/parental/api/badge_count')
 def get_badge_count():
     """API endpoint to get the current pending approvals count for badge."""

@@ -72,7 +72,7 @@ def _send_single_request(method, url, data, headers, verify_ssl):
         traceback.print_exc()
 
 
-def _send_federated_request(method, endpoint, payload, nodes_to_notify):
+def _send_federated_request(method, endpoint, payload, nodes_to_notify, node_secrets=None):
     """
     A helper function to send a signed request to a list of nodes in the background.
     """
@@ -85,12 +85,14 @@ def _send_federated_request(method, endpoint, payload, nodes_to_notify):
     request_body = json.dumps(payload, sort_keys=True).encode('utf-8')
 
     for hostname in nodes_to_notify:
-        node = get_node_by_hostname(hostname)
-        if not node or node['status'] != 'connected' or not node['shared_secret']:
-            print(f"Skipping federation to {hostname}: Node not connected or missing secret.")
-            continue
-
-        shared_secret = node['shared_secret']
+        # Use pre-built secrets if provided (avoids DB call in thread context)
+        if node_secrets and hostname in node_secrets:
+            shared_secret = node_secrets[hostname]
+        else:
+            node = get_node_by_hostname(hostname)
+            if not node or not node.get('shared_secret'):
+                continue
+            shared_secret = node['shared_secret']
         signature = hmac.new(
             shared_secret.encode('utf-8'),
             msg=request_body,
@@ -1563,6 +1565,263 @@ def distribute_media_tag_removal(muid, removed_user_puid):
     
     print(f"distribute_media_tag_removal: Sending tag removal for user {removed_user_puid} from media {muid} to nodes: {nodes_to_notify}")
     _send_federated_request('POST', '/federation/inbox', payload, nodes_to_notify)
+
+# =============================================================================
+# DIRECT MESSAGE FEDERATION — helpers called in request context
+# =============================================================================
+
+def distribute_dm_conversation(conv_uid):
+    """Distributes a new conversation to all remote participant nodes."""
+    from db_queries.conversations import get_conversation_by_conv_uid, get_conversation_participants
+    from db_queries.users import get_user_by_id
+
+    conversation = get_conversation_by_conv_uid(conv_uid)
+    if not conversation:
+        return
+
+    nodes = _get_dm_recipient_nodes(conversation['id'])
+    if not nodes:
+        return
+
+    participants = get_conversation_participants(conversation['id'])
+    creator = get_user_by_id(conversation['created_by_user_id'])
+    local_hostname = current_app.config.get('NODE_HOSTNAME')
+
+    participant_payload = [{
+        'puid': p['puid'],
+        'hostname': p.get('hostname') or local_hostname,
+        'display_name': p.get('display_name'),
+        'profile_picture_path': p.get('profile_picture_path')
+    } for p in participants]
+
+    payload = {
+        'conv_uid': conv_uid,
+        'created_by_puid': creator['puid'] if creator else None,
+        'created_by_hostname': (creator.get('hostname') or local_hostname) if creator else None,
+        'title': conversation.get('title'),
+        'picture_path': conversation.get('picture_path'),
+        'picture_origin_hostname': conversation.get('picture_origin_hostname') or (local_hostname if conversation.get('picture_path') else None),
+        'participants': participant_payload
+    }
+
+    _send_federated_request('POST', '/federation/api/v1/receive_dm_conversation', payload, set(nodes.keys()), node_secrets=nodes)
+
+
+def distribute_dm_message(conv_uid, msg_uid):
+    """Distributes a new DM to all remote participant nodes."""
+    from db_queries.conversations import get_conversation_by_conv_uid, get_message_by_msg_uid, get_media_for_message
+    from db_queries.users import get_user_by_id
+
+    conversation = get_conversation_by_conv_uid(conv_uid)
+    if not conversation:
+        return
+
+    message = get_message_by_msg_uid(msg_uid)
+    if not message or not message.get('sender_id'):
+        return
+
+    nodes = _get_dm_recipient_nodes(conversation['id'])
+    if not nodes:
+        return
+
+    sender = get_user_by_id(message['sender_id'])
+    if not sender:
+        return
+
+    local_hostname = current_app.config.get('NODE_HOSTNAME')
+
+    media_attachments = [{
+        'muid': m['muid'],
+        'media_file_path': m['media_file_path'],
+        'alt_text': m.get('alt_text'),
+        'origin_hostname': m.get('origin_hostname') or local_hostname
+    } for m in get_media_for_message(message['id'])]
+
+    payload = {
+        'conv_uid': conv_uid,
+        'msg_uid': msg_uid,
+        'sender_puid': sender['puid'],
+        'sender_hostname': sender.get('hostname') or local_hostname,
+        'sender_display_name': sender['display_name'],
+        'sender_profile_picture_path': sender.get('profile_picture_path'),
+        'content': message['content'],
+        'sent_at': str(message['sent_at']),
+        'reply_to_msg_uid': message.get('reply_to_msg_uid'),
+        'message_type': message.get('message_type', 'normal'),
+        'nu_id': message.get('nu_id'),
+        'media_attachments': media_attachments
+    }
+
+    _send_federated_request('POST', '/federation/api/v1/receive_dm_message', payload, set(nodes.keys()), node_secrets=nodes)
+
+
+def distribute_dm_edit(conv_uid, msg_uid, new_content):
+    """Distributes a message edit to all remote participant nodes."""
+    from db_queries.conversations import get_conversation_by_conv_uid
+
+    conversation = get_conversation_by_conv_uid(conv_uid)
+    if not conversation:
+        return
+
+    nodes = _get_dm_recipient_nodes(conversation['id'])
+    if not nodes:
+        return
+
+    payload = {'conv_uid': conv_uid, 'msg_uid': msg_uid, 'content': new_content}
+    _send_federated_request('POST', '/federation/api/v1/receive_dm_edit', payload, set(nodes.keys()), node_secrets=nodes)
+
+
+def distribute_dm_delete(conv_uid, msg_uid):
+    """Distributes a message soft-delete to all remote participant nodes."""
+    from db_queries.conversations import get_conversation_by_conv_uid
+
+    conversation = get_conversation_by_conv_uid(conv_uid)
+    if not conversation:
+        return
+
+    nodes = _get_dm_recipient_nodes(conversation['id'])
+    if not nodes:
+        return
+
+    payload = {'conv_uid': conv_uid, 'msg_uid': msg_uid}
+    _send_federated_request('POST', '/federation/api/v1/receive_dm_delete', payload, set(nodes.keys()), node_secrets=nodes)
+
+
+def distribute_dm_participant_update(conv_uid, action, actor_id, subject_puid, subject_hostname, subject_display_name):
+    """Distributes a participant add/remove/leave event to all remote participant nodes."""
+    from db_queries.conversations import get_conversation_by_conv_uid
+    from db_queries.users import get_user_by_id
+
+    conversation = get_conversation_by_conv_uid(conv_uid)
+    if not conversation:
+        return
+
+    nodes = _get_dm_recipient_nodes(conversation['id'])
+    if not nodes:
+        return
+
+    actor = get_user_by_id(actor_id)
+    if not actor:
+        return
+
+    local_hostname = current_app.config.get('NODE_HOSTNAME')
+    payload = {
+        'conv_uid': conv_uid,
+        'action': action,
+        'actor_puid': actor['puid'],
+        'actor_hostname': actor.get('hostname') or local_hostname,
+        'actor_display_name': actor['display_name'],
+        'subject_puid': subject_puid,
+        'subject_hostname': subject_hostname or local_hostname,
+        'subject_display_name': subject_display_name
+    }
+    _send_federated_request('POST', '/federation/api/v1/receive_dm_participant_update', payload, set(nodes.keys()), node_secrets=nodes)
+
+
+def _get_dm_recipient_nodes(conversation_id):
+    """
+    Returns a {hostname: shared_secret} dict for all remote participant nodes
+    in a conversation. Skips local users (no hostname) and unconnected nodes.
+    """
+    from db_queries.conversations import get_conversation_participants
+    from db_queries.federation import get_node_by_hostname
+
+    participants = get_conversation_participants(conversation_id)
+    local_hostname = current_app.config.get('NODE_HOSTNAME')
+    nodes = {}
+
+    for p in participants:
+        hostname = p.get('hostname')
+        if not hostname or hostname == local_hostname:
+            continue  # Skip local users
+        if hostname in nodes:
+            continue  # Already have this node
+
+        node = get_node_by_hostname(hostname)
+        if node and node.get('status') == 'connected' and node.get('shared_secret'):
+            nodes[hostname] = node['shared_secret']
+        else:
+            # No connection exists — try to establish a targeted subscription for this DM user
+            print(f"INFO: _get_dm_recipient_nodes: No connected node for {hostname}, attempting targeted subscription.")
+            from db_queries.federation import get_or_create_dm_targeted_subscription
+            node = get_or_create_dm_targeted_subscription(
+                hostname,
+                p['puid'],
+                p.get('display_name', 'Unknown')
+            )
+            if node and node.get('shared_secret'):
+                nodes[hostname] = node['shared_secret']
+            else:
+                print(f"WARN: _get_dm_recipient_nodes: Could not establish connection to {hostname}, skipping.")
+
+    return nodes  # {hostname: shared_secret}
+
+def notify_remote_node_of_dm_request_accepted(recipient_user, requester_user, conv_uid):
+    """
+    Notifies the requester's remote node that their DM request was accepted.
+    """
+    from db_queries.federation import get_node_by_hostname
+
+    remote_hostname = requester_user.get('hostname')
+    if not remote_hostname:
+        return
+
+    node = get_node_by_hostname(remote_hostname)
+    if not node or not node.get('shared_secret'):
+        print(f"WARN: notify_remote_node_of_dm_request_accepted: No connected node for {remote_hostname}")
+        return
+
+    try:
+        payload = {
+            'conv_uid': conv_uid,
+            'requester_puid': requester_user['puid'],
+            'recipient_puid': recipient_user['puid'],
+            'recipient_display_name': recipient_user['display_name'],
+            'recipient_profile_picture_path': recipient_user.get('profile_picture_path'),
+        }
+        _send_federated_request(
+            'POST',
+            '/federation/api/v1/dm_request_accepted',
+            payload,
+            {remote_hostname},
+            node_secrets={remote_hostname: node['shared_secret']}
+        )
+    except Exception as e:
+        print(f"ERROR: notify_remote_node_of_dm_request_accepted: {e}")
+
+
+def notify_remote_node_of_dm_request_declined(recipient_user, requester_user, conv_uid):
+    """
+    Notifies the requester's remote node that their DM request was declined.
+    """
+    from db_queries.federation import get_node_by_hostname
+
+    remote_hostname = requester_user.get('hostname')
+    if not remote_hostname:
+        return
+
+    node = get_node_by_hostname(remote_hostname)
+    if not node or not node.get('shared_secret'):
+        print(f"WARN: notify_remote_node_of_dm_request_declined: No connected node for {remote_hostname}")
+        return
+
+    try:
+        payload = {
+            'conv_uid': conv_uid,
+            'requester_puid': requester_user['puid'],
+            'recipient_puid': recipient_user['puid'],
+            'recipient_display_name': recipient_user['display_name'],
+            'recipient_profile_picture_path': recipient_user.get('profile_picture_path'),
+        }
+        _send_federated_request(
+            'POST',
+            '/federation/api/v1/dm_request_declined',
+            payload,
+            {remote_hostname},
+            node_secrets={remote_hostname: node['shared_secret']}
+        )
+    except Exception as e:
+        print(f"ERROR: notify_remote_node_of_dm_request_declined: {e}")
 
 def distribute_poll_data(post_cuid):
     """

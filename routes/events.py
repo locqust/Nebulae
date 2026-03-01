@@ -14,6 +14,7 @@ from db_queries.posts import get_posts_for_feed, add_post, get_post_by_cuid
 # MODIFICATION: Import get_all_connected_nodes
 from db_queries.federation import get_node_by_hostname, get_or_create_remote_user, get_all_connected_nodes
 from db_queries.settings import get_user_settings
+from db_queries.profiles import get_friend_birthdays_next_12_months
 from db_queries.notifications import get_unread_notification_count
 import os
 import base64
@@ -198,6 +199,9 @@ def get_events_content():
     # --- End Federated Discovery ---
 
     user_events = get_events_for_user(current_user['puid'])
+    from datetime import date
+    friend_birthdays = get_friend_birthdays_next_12_months(current_user['id'], current_app.config)
+    today = date.today()
 
     # Render the *partial* template
     # get_events_for_user *already* processes the datetimes, so this is safe.
@@ -206,7 +210,9 @@ def get_events_content():
                            invitations=user_events['invitations'],
                            discover_public=user_events['discover_public'],
                            past=user_events['past'],
-                           current_user_puid=current_user['puid'])
+                           current_user_puid=current_user['puid'],
+                           friend_birthdays=friend_birthdays,
+                           today=today)
 
 
 # NEW: API route specifically for the 'Discover' tab content

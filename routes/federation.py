@@ -88,10 +88,10 @@ def receive_targeted_subscription_request():
     if not all([remote_hostname, remote_nu_id, resource_type, resource_puid]):
         return jsonify({'error': 'Missing required fields.'}), 400
     
-    if resource_type not in ['group', 'public_page']:
+    if resource_type not in ['group', 'public_page', 'dm_user']:
         return jsonify({'error': 'Invalid resource_type.'}), 400
     
-    # Verify the resource exists and is discoverable
+    # Verify the resource exists and is accessible
     if resource_type == 'group':
         resource = get_group_by_puid(resource_puid)
         if not resource or resource.get('is_remote'):
@@ -100,6 +100,12 @@ def receive_targeted_subscription_request():
         resource = get_user_by_puid(resource_puid)
         if not resource or resource.get('user_type') != 'public_page' or resource.get('hostname'):
             return jsonify({'error': 'Public page not found or not hosted here.'}), 404
+    elif resource_type == 'dm_user':
+        resource = get_user_by_puid(resource_puid)
+        if not resource or resource.get('hostname'):
+            return jsonify({'error': 'User not found or not local to this node.'}), 404
+        # Any local user can receive DMs via targeted subscription
+        # (dm_requests/blocking is enforced at message receipt time)
     
     # Generate shared secret
     shared_secret = secrets.token_hex(32)
@@ -191,6 +197,80 @@ def discover_public_events():
         traceback.print_exc()
         return jsonify({'error': f'An internal error occurred: {str(e)}'}), 500
 # --- END NEW ENDPOINT ---
+
+# --- NEW ENDPOINT for birthday federation ---
+@federation_bp.route('/federation/api/v1/friend_birthdays', methods=['POST'])
+@signature_required
+def get_friend_birthdays():
+    """
+    Receives a list of local-user PUIDs from a connected node and returns
+    their DOB if the privacy settings permit the requesting node to see it.
+
+    Privacy rules applied from the perspective of the remote viewer (a local
+    user on the requesting node, i.e. NOT a federated viewer):
+      - privacy_public = 1   → always return
+      - privacy_friends = 1  → return only if the PUID is in the provided
+                               friend_puids list (the requesting node vouches
+                               for the friendship)
+      - privacy_local = 1    → NEVER return to a remote node (local means
+                               local to THIS node only)
+    """
+    try:
+        data = request.get_json(force=True)
+        if not data:
+            return jsonify({'error': 'Request body must be valid JSON.'}), 400
+
+        # List of PUIDs of THIS node's local users that the requester is friends with
+        friend_puids = data.get('friend_puids', [])
+        if not isinstance(friend_puids, list) or not friend_puids:
+            return jsonify([]), 200
+
+        db = get_db()
+        cursor = db.cursor()
+
+        placeholders = ','.join('?' * len(friend_puids))
+        cursor.execute(f"""
+            SELECT u.puid, u.display_name, u.username, u.profile_picture_path,
+                   upi.field_value as dob,
+                   upi.privacy_public, upi.privacy_local, upi.privacy_friends
+            FROM users u
+            JOIN user_profile_info upi ON u.id = upi.user_id
+            WHERE upi.field_name = 'dob'
+              AND upi.field_value IS NOT NULL
+              AND upi.field_value != ''
+              AND u.hostname IS NULL
+              AND u.puid IN ({placeholders})
+        """, friend_puids)
+
+        rows = cursor.fetchall()
+        results = []
+        friend_puids_set = set(friend_puids)
+
+        for row in rows:
+            row = dict(row)
+            # Apply privacy: local = never share cross-node
+            if row['privacy_public'] == 1:
+                visible = True
+            elif row['privacy_friends'] == 1 and row['puid'] in friend_puids_set:
+                visible = True
+            else:
+                visible = False  # privacy_local or private: don't cross node boundary
+
+            if visible:
+                results.append({
+                    'puid': row['puid'],
+                    'display_name': row['display_name'],
+                    'username': row['username'],
+                    'profile_picture_path': row['profile_picture_path'],
+                    'dob': row['dob'],  # YYYY-MM-DD string
+                })
+
+        return jsonify(results), 200
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'An internal error occurred: {str(e)}'}), 500
+# --- END BIRTHDAY FEDERATION ENDPOINT ---
 
 @federation_bp.route('/federation/api/v1/group_join_request_created', methods=['POST'])
 @signature_required
@@ -2459,3 +2539,491 @@ def create_parental_approval():
         import traceback
         traceback.print_exc()
         return jsonify({'error': f'An internal error occurred: {str(e)}'}), 500
+    
+    # =============================================================================
+# FEDERATION: DIRECT MESSAGES
+# =============================================================================
+
+@federation_bp.route('/federation/api/v1/receive_dm_conversation', methods=['POST'])
+@signature_required
+def receive_dm_conversation():
+    """
+    Receives a conversation creation/sync from a remote node.
+    Called when a conversation involving local users is created or updated on another node.
+    
+    Payload:
+    {
+        "conv_uid": "...",
+        "created_by_puid": "...",
+        "created_by_hostname": "...",
+        "title": "optional title",
+        "picture_path": null,
+        "participants": [
+            {"puid": "...", "hostname": "...", "display_name": "...", "profile_picture_path": "..."},
+            ...
+        ]
+    }
+    """
+    from db_queries.conversations import (
+        get_conversation_by_conv_uid, create_federated_conversation
+    )
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Request body required'}), 400
+
+        conv_uid = data.get('conv_uid')
+        participants_data = data.get('participants', [])
+        
+        if not conv_uid or not participants_data:
+            return jsonify({'error': 'conv_uid and participants required'}), 400
+
+        # Check if conversation already exists locally
+        existing = get_conversation_by_conv_uid(conv_uid)
+        if existing:
+            from db_queries.conversations import rename_conversation, update_conversation_picture
+            if data.get('title') != existing.get('title'):
+                rename_conversation(conv_uid, data.get('title'), existing['created_by_user_id'])
+            if data.get('picture_path') != existing.get('picture_path'):
+                update_conversation_picture(conv_uid, data.get('picture_path'), data.get('picture_origin_hostname'))
+            return jsonify({'message': 'Conversation updated'}), 200
+
+        # Resolve all participants to local user records (creating stubs for remote users)
+        local_user_ids = []
+        creator_user_id = None
+        created_by_puid = data.get('created_by_puid')
+
+        for p in participants_data:
+            puid = p.get('puid')
+            hostname = p.get('hostname')
+            local_hostname = current_app.config.get('NODE_HOSTNAME')
+
+            if hostname == local_hostname or not hostname:
+                # Local user
+                user = get_user_by_puid(puid)
+            else:
+                # Remote user — get or create stub
+                user = get_or_create_remote_user(
+                    puid=puid,
+                    display_name=p.get('display_name', 'Unknown'),
+                    hostname=hostname,
+                    profile_picture_path=p.get('profile_picture_path')
+                )
+            
+            if user:
+                local_user_ids.append(user['id'])
+                if puid == created_by_puid:
+                    creator_user_id = user['id']
+
+        if not local_user_ids or not creator_user_id:
+            return jsonify({'error': 'Could not resolve participants'}), 500
+
+        # ── PARENTAL CONTROLS & BLOCK CHECKS ────────────────────────────────
+        # For 1:1 conversations, check if the local recipient is protected
+        if len(local_user_ids) == 2:
+            from db_queries.parental_controls import requires_parental_approval, create_approval_request, get_all_parent_ids
+            from db_queries.conversations import is_user_blocked_from_dms
+            from db_queries.notifications import create_notification
+            import json as _json
+
+            # Identify the local recipient (non-creator)
+            remote_creator = get_user_by_puid(created_by_puid)
+            local_recipients = [uid for uid in local_user_ids if uid != creator_user_id]
+
+            for local_recipient_id in local_recipients:
+                # Check if this user has blocked the remote creator
+                if remote_creator and is_user_blocked_from_dms(local_recipient_id, remote_creator['id']):
+                    # Silently drop — don't reveal to remote node that they're blocked
+                    return jsonify({'message': 'Conversation created'}), 201
+
+                # Check if parental approval is needed
+                if requires_parental_approval(local_recipient_id):
+                    approval_id = create_approval_request(
+                        child_user_id=local_recipient_id,
+                        approval_type='dm_start_in',
+                        target_puid=created_by_puid,
+                        target_hostname=data.get('created_by_hostname'),
+                        request_data=_json.dumps({
+                            'sender_display_name': remote_creator.get('display_name', 'Unknown') if remote_creator else 'Unknown',
+                            'sender_puid': created_by_puid,
+                            'sender_hostname': data.get('created_by_hostname'),
+                            'conv_uid': conv_uid,
+                        })
+                    )
+                    if approval_id:
+                        for parent_id in get_all_parent_ids(local_recipient_id):
+                            create_notification(parent_id, local_recipient_id, 'parental_approval_needed')
+                    # Tell remote node "ok" — don't leak that approval is pending
+                    return jsonify({'message': 'Conversation pending approval'}), 202
+        # ── END PARENTAL CONTROLS & BLOCK CHECKS ────────────────────────────
+
+        # Create the conversation with the canonical conv_uid from the originating node
+        success = create_federated_conversation(
+            conv_uid=conv_uid,
+            creator_user_id=creator_user_id,
+            participant_ids=local_user_ids,
+            title=data.get('title'),
+            picture_path=data.get('picture_path'),
+            picture_origin_hostname=data.get('picture_origin_hostname')
+        )
+
+        if success:
+            return jsonify({'message': 'Conversation created'}), 201
+        else:
+            return jsonify({'error': 'Failed to create conversation'}), 500
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'Internal error: {str(e)}'}), 500
+
+
+@federation_bp.route('/federation/api/v1/receive_dm_message', methods=['POST'])
+@signature_required
+def receive_dm_message():
+    """
+    Receives a new DM from a remote node and stores it locally.
+    
+    Payload:
+    {
+        "conv_uid": "...",
+        "msg_uid": "...",
+        "sender_puid": "...",
+        "sender_hostname": "...",
+        "sender_display_name": "...",
+        "sender_profile_picture_path": "...",
+        "content": "...",
+        "sent_at": "2026-01-01 12:00:00",
+        "reply_to_msg_uid": null,
+        "message_type": "normal",
+        "nu_id": "..."
+    }
+    """
+    from db_queries.conversations import (
+        get_conversation_by_conv_uid, receive_federated_message
+    )
+    from db_queries.notifications import create_notification
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Request body required'}), 400
+
+        conv_uid = data.get('conv_uid')
+        msg_uid = data.get('msg_uid')
+        sender_puid = data.get('sender_puid')
+        content = data.get('content')
+
+        if not all([conv_uid, msg_uid, sender_puid, content]):
+            return jsonify({'error': 'conv_uid, msg_uid, sender_puid, content required'}), 400
+
+        # Conversation must exist locally (receive_dm_conversation should have been called first)
+        conversation = get_conversation_by_conv_uid(conv_uid)
+        if not conversation:
+            return jsonify({'error': 'Conversation not found. Sync conversation first.'}), 404
+
+        # Get or create sender stub
+        sender_hostname = data.get('sender_hostname')
+        local_hostname = current_app.config.get('NODE_HOSTNAME')
+        
+        if sender_hostname == local_hostname or not sender_hostname:
+            sender = get_user_by_puid(sender_puid)
+        else:
+            sender = get_or_create_remote_user(
+                puid=sender_puid,
+                display_name=data.get('sender_display_name', 'Unknown'),
+                hostname=sender_hostname,
+                profile_picture_path=data.get('sender_profile_picture_path')
+            )
+        
+        if not sender:
+            return jsonify({'error': 'Could not resolve sender'}), 500
+
+        # Store message locally
+        message = receive_federated_message(
+            conversation_id=conversation['id'],
+            sender_id=sender['id'],
+            msg_uid=msg_uid,
+            content=content,
+            sent_at=data.get('sent_at'),
+            reply_to_msg_uid=data.get('reply_to_msg_uid'),
+            message_type=data.get('message_type', 'normal'),
+            nu_id=data.get('nu_id')
+        )
+
+        if not message:
+            return jsonify({'error': 'Failed to store message'}), 500
+
+
+        # Store media attachments (file stays remote, we just record the reference)
+        from db_queries.conversations import add_media_to_message as add_dm_media
+        media_attachments = data.get('media_attachments', [])
+        for m in media_attachments:
+            muid = m.get('muid')
+            media_file_path = m.get('media_file_path')
+            if muid and media_file_path:
+                # Insert with known muid (idempotent - UNIQUE constraint on muid handles dupes)
+                db = get_db()
+                cursor = db.cursor()
+                try:
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO direct_message_media 
+                            (muid, message_id, media_file_path, alt_text, origin_hostname)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (
+                        muid,
+                        message['id'],
+                        media_file_path,
+                        m.get('alt_text'),
+                        m.get('origin_hostname')  # ← key: stores the sender's node
+                    ))
+                    db.commit()
+                except Exception as e:
+                    print(f"WARN: Could not store federated DM media {muid}: {e}")
+
+        # No notification record needed — the message badge is driven by
+        # get_unread_conversation_count_for_user which queries direct_messages
+        # directly. Creating a notification here causes double-badging.
+        # (Local sends via send_message_api also don't create notifications.)
+
+        return jsonify({'message': 'Message received', 'msg_uid': msg_uid}), 201
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'Internal error: {str(e)}'}), 500
+
+
+@federation_bp.route('/federation/api/v1/receive_dm_edit', methods=['POST'])
+@signature_required
+def receive_dm_edit():
+    """
+    Receives a message edit from a remote node.
+    
+    Payload: {"msg_uid": "...", "conv_uid": "...", "content": "..."}
+    """
+    from db_queries.conversations import get_conversation_by_conv_uid, get_message_by_msg_uid
+    try:
+        data = request.get_json()
+        msg_uid = data.get('msg_uid')
+        new_content = data.get('content')
+
+        if not msg_uid or not new_content:
+            return jsonify({'error': 'msg_uid and content required'}), 400
+
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("""
+            UPDATE direct_messages 
+            SET content = ?, edited_at = CURRENT_TIMESTAMP
+            WHERE msg_uid = ?
+        """, (new_content.strip(), msg_uid))
+        db.commit()
+
+        if cursor.rowcount == 0:
+            return jsonify({'error': 'Message not found'}), 404
+
+        return jsonify({'message': 'Edit applied'}), 200
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'Internal error: {str(e)}'}), 500
+
+
+@federation_bp.route('/federation/api/v1/receive_dm_delete', methods=['POST'])
+@signature_required
+def receive_dm_delete():
+    """
+    Receives a message soft-delete from a remote node.
+    
+    Payload: {"msg_uid": "...", "conv_uid": "..."}
+    """
+    try:
+        data = request.get_json()
+        msg_uid = data.get('msg_uid')
+
+        if not msg_uid:
+            return jsonify({'error': 'msg_uid required'}), 400
+
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("""
+            UPDATE direct_messages 
+            SET is_deleted = 1, content = 'This message was deleted.', edited_at = CURRENT_TIMESTAMP
+            WHERE msg_uid = ?
+        """, (msg_uid,))
+        db.commit()
+
+        return jsonify({'message': 'Delete applied'}), 200
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'Internal error: {str(e)}'}), 500
+
+
+@federation_bp.route('/federation/api/v1/receive_dm_participant_update', methods=['POST'])
+@signature_required
+def receive_dm_participant_update():
+    """
+    Receives participant changes (add/remove/leave) for a federated conversation.
+    
+    Payload:
+    {
+        "conv_uid": "...",
+        "action": "add" | "remove" | "leave",
+        "actor_puid": "...",        -- who did the action
+        "actor_hostname": "...",
+        "subject_puid": "...",       -- who was affected
+        "subject_hostname": "...",
+        "subject_display_name": "..."
+    }
+    """
+    from db_queries.conversations import (
+        get_conversation_by_conv_uid, invite_participant, 
+        remove_participant, leave_conversation
+    )
+    try:
+        data = request.get_json()
+        conv_uid = data.get('conv_uid')
+        action = data.get('action')
+        subject_puid = data.get('subject_puid')
+
+        if not all([conv_uid, action, subject_puid]):
+            return jsonify({'error': 'conv_uid, action, subject_puid required'}), 400
+
+        if action not in ['add', 'remove', 'leave']:
+            return jsonify({'error': 'Invalid action'}), 400
+
+        conversation = get_conversation_by_conv_uid(conv_uid)
+        if not conversation:
+            return jsonify({'message': 'Conversation not found, ignoring'}), 200
+
+        # Resolve subject
+        subject_hostname = data.get('subject_hostname')
+        local_hostname = current_app.config.get('NODE_HOSTNAME')
+
+        if subject_hostname == local_hostname or not subject_hostname:
+            subject = get_user_by_puid(subject_puid)
+        else:
+            subject = get_or_create_remote_user(
+                puid=subject_puid,
+                display_name=data.get('subject_display_name', 'Unknown'),
+                hostname=subject_hostname
+            )
+        
+        if not subject:
+            return jsonify({'error': 'Could not resolve subject user'}), 404
+
+        actor_puid = data.get('actor_puid')
+        actor_hostname = data.get('actor_hostname')
+        if actor_hostname == local_hostname or not actor_hostname:
+            actor = get_user_by_puid(actor_puid)
+        else:
+            actor = get_or_create_remote_user(
+                puid=actor_puid,
+                display_name=data.get('actor_display_name', 'Unknown'),
+                hostname=actor_hostname
+            )
+        actor_id = actor['id'] if actor else subject['id']
+
+        db_obj = get_db()
+        cursor = db_obj.cursor()
+
+        if action == 'add':
+            invite_participant(conversation['id'], subject['id'], actor_id)
+        elif action == 'remove':
+            remove_participant(conversation['id'], subject['id'], actor_id)
+        elif action == 'leave':
+            # Mark as left in conversation_participants
+            cursor.execute("""
+                UPDATE conversation_participants 
+                SET left_at = CURRENT_TIMESTAMP 
+                WHERE conversation_id = ? AND user_id = ?
+            """, (conversation['id'], subject['id']))
+            db_obj.commit()
+
+        return jsonify({'message': f'Participant {action} applied'}), 200
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'Internal error: {str(e)}'}), 500
+    
+@federation_bp.route('/federation/api/v1/dm_request_accepted', methods=['POST'])
+@signature_required
+def receive_dm_request_accepted():
+    """
+    Receives notification from a remote node that a local user's DM request was accepted.
+    Creates a local notification for the requester.
+    """
+    from db_queries.users import get_user_by_puid
+    from db_queries.federation import get_or_create_remote_user
+    from db_queries.notifications import create_notification
+    try:
+        data = request.get_json()
+        requester_puid = data.get('requester_puid')
+        recipient_puid = data.get('recipient_puid')
+        recipient_display_name = data.get('recipient_display_name')
+        recipient_profile_picture_path = data.get('recipient_profile_picture_path')
+
+        if not requester_puid or not recipient_puid:
+            return jsonify({'error': 'requester_puid and recipient_puid required'}), 400
+
+        # Requester must be a local user on this node
+        requester = get_user_by_puid(requester_puid)
+        if not requester or requester.get('hostname'):
+            return jsonify({'error': 'Requester is not a local user on this node'}), 404
+
+        # Get or create the recipient stub (the remote user who accepted)
+        recipient = get_or_create_remote_user(
+            puid=recipient_puid,
+            display_name=recipient_display_name or 'Unknown',
+            hostname=request.headers.get('X-Node-Hostname'),
+            profile_picture_path=recipient_profile_picture_path
+        )
+        if not recipient:
+            return jsonify({'error': 'Could not resolve recipient user'}), 500
+
+        create_notification(requester['id'], recipient['id'], 'dm_request_accepted')
+        return jsonify({'message': 'Notification created'}), 200
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'Internal error: {str(e)}'}), 500
+
+
+@federation_bp.route('/federation/api/v1/dm_request_declined', methods=['POST'])
+@signature_required
+def receive_dm_request_declined():
+    """
+    Receives notification from a remote node that a local user's DM request was declined.
+    Creates a local notification for the requester.
+    """
+    from db_queries.users import get_user_by_puid
+    from db_queries.federation import get_or_create_remote_user
+    from db_queries.notifications import create_notification
+    try:
+        data = request.get_json()
+        requester_puid = data.get('requester_puid')
+        recipient_puid = data.get('recipient_puid')
+        recipient_display_name = data.get('recipient_display_name')
+        recipient_profile_picture_path = data.get('recipient_profile_picture_path')
+
+        if not requester_puid or not recipient_puid:
+            return jsonify({'error': 'requester_puid and recipient_puid required'}), 400
+
+        requester = get_user_by_puid(requester_puid)
+        if not requester or requester.get('hostname'):
+            return jsonify({'error': 'Requester is not a local user on this node'}), 404
+
+        recipient = get_or_create_remote_user(
+            puid=recipient_puid,
+            display_name=recipient_display_name or 'Unknown',
+            hostname=request.headers.get('X-Node-Hostname'),
+            profile_picture_path=recipient_profile_picture_path
+        )
+        if not recipient:
+            return jsonify({'error': 'Could not resolve recipient user'}), 500
+
+        create_notification(requester['id'], recipient['id'], 'dm_request_declined')
+        return jsonify({'message': 'Notification created'}), 200
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'Internal error: {str(e)}'}), 500

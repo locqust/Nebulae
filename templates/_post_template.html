@@ -168,6 +168,8 @@
         {% set can_disable_comments = show_delete_option and not post.is_repost %}
         {# NEW: Define permission for friend actions (snooze/block) #}
         {% set show_friend_options = current_user_puid and original_post.author.puid != current_user_puid and original_post.author.puid in friend_puids %}
+        {# Show 'Message' option for any non-owner logged-in user (anyone you can see their post) #}
+        {% set show_message_option = current_user_puid and original_post.author.puid != current_user_puid %}
         
         {# NEW: Check if current user is tagged in this post #}
         {% set is_tagged_in_post = false %}
@@ -192,7 +194,7 @@
         {% set show_hide_option = current_user_puid and current_user_puid != original_post.author.puid %}
 
 
-        {% if show_edit_option or show_delete_option or show_share_option or can_disable_comments or show_friend_options or is_tagged_in_post or is_mentioned_in_post or show_hide_option %}
+        {% if show_edit_option or show_delete_option or show_share_option or can_disable_comments or show_friend_options or show_message_option or is_tagged_in_post or is_mentioned_in_post or show_hide_option %}
             <div class="relative inline-block text-left">
                 <button type="button" class="inline-flex justify-center w-full rounded-md px-2 py-1 text-sm font-medium secondary-text hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" id="options-menu-{{ post.cuid }}" onclick="toggleDropdown(event, 'dropdown-menu-{{ post.cuid }}')">
                     <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -275,6 +277,20 @@
                                     </span>
                                 </button>
                             </form>
+                        {% endif %}
+
+                        {# Message author option #}
+                        {% if show_message_option %}
+                        <button type="button"
+                                onclick="closeDropdown('dropdown-menu-{{ post.cuid }}'); startConversationWith('{{ original_post.author.puid }}')"
+                                class="hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm">
+                            <span class="inline-flex items-center gap-2">
+                                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-3 3v-3z"></path>
+                                </svg>
+                                <span>Message {{ original_post.author.display_name or original_post.author.username }}</span>
+                            </span>
+                        </button>
                         {% endif %}
                         
                         {# NEW: Remove Tag Option #}

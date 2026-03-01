@@ -1270,3 +1270,92 @@ def notify_home_node_of_friend_request_attempt(federated_user, target_user):
         print(f"ERROR notifying home node of friend request attempt: {e}")
         traceback.print_exc()
         return False
+
+def notify_home_node_of_dm_start_attempt(federated_user, target_user, local_hostname):
+    """
+    Notify a federated user's home node that they attempted to start a DM,
+    so the home node can create a parental approval request.
+    """
+    from utils.federation_utils import get_remote_node_api_url
+    
+    home_hostname = federated_user.get('hostname')
+    if not home_hostname:
+        return False
+    
+    node = get_node_by_hostname(home_hostname)
+    if not node or not node['shared_secret']:
+        return False
+    
+    try:
+        insecure_mode = current_app.config.get('FEDERATION_INSECURE_MODE', False)
+        verify_ssl = not insecure_mode
+        
+        remote_url = get_remote_node_api_url(
+            home_hostname,
+            '/federation/api/v1/create_parental_approval',
+            insecure_mode
+        )
+        
+        payload = {
+            'user_puid': federated_user['puid'],
+            'approval_type': 'dm_start_out',
+            'target_puid': target_user['puid'],
+            'target_hostname': local_hostname,
+            'request_data': {
+                'target_display_name': target_user.get('display_name', 'Unknown'),
+                'target_puid': target_user['puid'],
+                'target_hostname': local_hostname,
+            }
+        }
+        
+        request_body = json.dumps(payload, sort_keys=True).encode('utf-8')
+        signature = hmac.new(
+            node['shared_secret'].encode('utf-8'),
+            msg=request_body,
+            digestmod=hashlib.sha256
+        ).hexdigest()
+        
+        headers = {
+            'X-Node-Hostname': local_hostname,
+            'X-Node-Signature': signature,
+            'Content-Type': 'application/json'
+        }
+        
+        response = requests.post(remote_url, data=request_body, headers=headers, timeout=10, verify=verify_ssl)
+        if response.status_code == 200:
+            # Home node confirmed: parental approval is pending
+            return True
+        elif response.status_code == 400:
+            # Home node says user doesn't require parental approval — no action needed
+            return False
+        else:
+            response.raise_for_status()
+            return False
+        
+    except Exception as e:
+        print(f"ERROR notifying home node of DM start attempt: {e}")
+        traceback.print_exc()
+        return False
+
+def get_or_create_dm_targeted_subscription(hostname, user_puid, user_display_name):
+    """
+    Creates or retrieves a targeted subscription specifically for DM access to a remote user.
+    This is triggered automatically when a user tries to message someone on an unconnected node.
+    
+    Unlike group/page subscriptions which are user-initiated, DM subscriptions are
+    created transparently when the first message is sent.
+    
+    Args:
+        hostname: The remote node's hostname
+        user_puid: The PUID of the user on the remote node
+        user_display_name: Display name of the user
+    
+    Returns:
+        dict: The connection record, or None if failed
+    """
+    return get_or_create_targeted_subscription(
+        hostname=hostname,
+        resource_type='dm_user',
+        resource_puid=user_puid,
+        resource_name=user_display_name
+    )

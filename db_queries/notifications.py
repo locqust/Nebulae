@@ -230,7 +230,9 @@ def _get_notification_text(notification_type, actor_name):
         'media_mention': f'{actor_name} mentioned you in a photo comment',
         'parental_approval_needed': f'{actor_name} needs parental approval',
         'parental_approval_approved': f'{actor_name} approved your request',
-        'parental_approval_denied': f'{actor_name} denied your request'
+        'parental_approval_denied': f'{actor_name} denied your request',
+        'dm_request_declined': f'{actor_name} declined your message request',
+        'dm_request_accepted': f'{actor_name} accepted your message request'
     }
     return texts.get(notification_type, 'You have a new notification')
 
@@ -282,6 +284,10 @@ def _get_notification_url(notification_type, post_id, comment_id, group_id, even
         if event_row:
             return url_for('events.event_profile', puid=event_row['puid'], _external=False)
     
+    # DM request notifications - go to messages page
+    if notification_type in ['dm_request_declined', 'dm_request_accepted']:
+        return url_for('conversations.messages_page', _external=False)
+
     # NEW: Parental approval notifications - go to parental dashboard
     if notification_type in ['parental_approval_needed', 'parental_approval_approved', 'parental_approval_denied']:
         # For parents needing to approve - go to dashboard
@@ -302,7 +308,7 @@ def _get_notification_url(notification_type, post_id, comment_id, group_id, even
     # Default to actor's profile if available
     if actor_puid:
         return url_for('main.user_profile', puid=actor_puid, _external=False)
-    
+
     # Fallback to home
     return url_for('main.index', _external=False)
 
@@ -403,7 +409,8 @@ def check_and_create_birthday_notifications():
     today_month_day = datetime.utcnow().strftime('%m-%d')
     cursor.execute("""
         SELECT user_id FROM user_profile_info
-        WHERE field_name = 'dob' AND substr(field_value, 6) = ? AND privacy_friends = 1
+        WHERE field_name = 'dob' AND substr(field_value, 6) = ?
+          AND (privacy_friends = 1 OR privacy_public = 1 OR privacy_local = 1)
     """, (today_month_day,))
     
     birthday_users = cursor.fetchall()

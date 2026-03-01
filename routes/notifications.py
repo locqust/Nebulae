@@ -117,6 +117,10 @@ def get_notifications():
             n['text'] = f"<strong>{n['actor_display_name']}</strong> approved your request."
         elif n['type'] == 'parental_approval_denied': 
             n['text'] = f"<strong>{n['actor_display_name']}</strong> denied your request."
+        elif n['type'] == 'dm_request_declined':
+            n['text'] = f"<strong>{n['actor_display_name']}</strong> declined your message request."
+        elif n['type'] == 'dm_request_accepted':
+            n['text'] = f"<strong>{n['actor_display_name']}</strong> accepted your message request. You can now chat!"
         else: n['text'] = 'New notification.'
         
         if n['type'] in ['comment', 'reply', 'mention', 'everyone_mention', 'wall_post', 'group_post', 'repost', 'page_post', 'event_update', 'event_post']:
@@ -147,6 +151,8 @@ def get_notifications():
         elif n['type'] in ['parental_approval_approved', 'parental_approval_denied']:
             # Child gets result - go to home
             n['url'] = url_for('main.index')
+        elif n['type'] in ['dm_request_declined', 'dm_request_accepted']:
+            n['url'] = url_for('conversations.messages_page')
 
         notifications.append(n)
     
@@ -324,6 +330,27 @@ def check_new_notifications():
                 elif n['type'] == 'parental_approval_denied':
                     n['text'] = f"{n['actor_display_name']} denied your request."
                     n['url'] = url_for('main.index')
+                elif n['type'] == 'dm_request_declined':
+                    n['text'] = f"{n['actor_display_name']} declined your message request."
+                    n['url'] = url_for('conversations.messages_page')
+                elif n['type'] == 'dm_request_accepted':
+                    n['text'] = f"{n['actor_display_name']} accepted your message request. You can now chat!"
+                    n['url'] = url_for('conversations.messages_page')
+                elif n['type'] == 'tagged_in_post':
+                    n['text'] = f"{n['actor_display_name']} tagged you in a post."
+                    if n.get('post_cuid'):
+                        n['url'] = url_for('main.view_post', cuid=n['post_cuid'])
+                elif n['type'] in ['tagged_in_media', 'media_comment', 'media_mention', 'media_reply', 'tagged_media_comment']:
+                    type_texts = {
+                        'tagged_in_media': f"{n['actor_display_name']} tagged you in a photo.",
+                        'media_comment': f"{n['actor_display_name']} commented on your media.",
+                        'media_mention': f"{n['actor_display_name']} mentioned you in a media comment.",
+                        'media_reply': f"{n['actor_display_name']} replied to your media comment.",
+                        'tagged_media_comment': f"{n['actor_display_name']} commented on a photo you're tagged in.",
+                    }
+                    n['text'] = type_texts.get(n['type'], 'New notification.')
+                    if n.get('media_muid'):
+                        n['url'] = url_for('main.view_media', muid=n['media_muid'])
                 else:
                     n['text'] = 'New notification.'
                 

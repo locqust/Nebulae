@@ -268,7 +268,7 @@ CREATE INDEX IF NOT EXISTS idx_parental_controls_parent ON parental_controls(par
 CREATE TABLE IF NOT EXISTS parental_approval_queue (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     child_user_id INTEGER NOT NULL,
-    approval_type TEXT NOT NULL, -- 'friend_request_out', 'group_join', event_invite', 'media_tag'
+    approval_type TEXT NOT NULL, -- 'friend_request_out', 'group_join', event_invite', 'media_tag', 'dm_start_out', 'dm_start_in'
     target_puid TEXT NOT NULL, -- PUID of the friend/group/event/media being requested
     target_hostname TEXT, -- Hostname if remote, NULL if local
     request_data TEXT, -- JSON data about the request
@@ -559,3 +559,111 @@ CREATE TABLE IF NOT EXISTS media_comment_media (
     origin_hostname TEXT, -- The hostname where the media file is stored (for federation)
     FOREIGN KEY (media_comment_id) REFERENCES media_comments(id) ON DELETE CASCADE
 );
+
+-- Conversations table - stores conversation metadata
+CREATE TABLE IF NOT EXISTS conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conv_uid TEXT UNIQUE NOT NULL,  -- Conversation Unique ID
+    created_by_user_id INTEGER NOT NULL,  -- User who initiated the conversation
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_message_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- For sorting conversations
+    title TEXT,
+    picture_path TEXT,
+    picture_origin_hostname TEXT,
+    FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversations_conv_uid ON conversations(conv_uid);
+CREATE INDEX IF NOT EXISTS idx_conversations_last_message ON conversations(last_message_at DESC);
+CREATE INDEX IF NOT EXISTS idx_conv_by_uid ON conversations(conv_uid);
+
+-- Conversation participants - junction table linking users to conversations
+CREATE TABLE IF NOT EXISTS conversation_participants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_read_at TIMESTAMP,  -- Track read status per participant
+    is_archived BOOLEAN DEFAULT FALSE,  -- User can archive conversations
+    left_at TIMESTAMP,
+    UNIQUE(conversation_id, user_id),  -- User can only be in a conversation once
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_conv_participants_user ON conversation_participants(user_id);
+CREATE INDEX IF NOT EXISTS idx_conv_participants_conversation ON conversation_participants(conversation_id);
+
+-- Direct messages table - individual messages within conversations
+CREATE TABLE IF NOT EXISTS direct_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    msg_uid TEXT UNIQUE NOT NULL,  -- Message Unique ID
+    conversation_id INTEGER NOT NULL,
+    sender_id INTEGER,
+    content TEXT NOT NULL,
+    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    edited_at TIMESTAMP,  -- Track if message was edited
+    is_deleted BOOLEAN DEFAULT FALSE,  -- Soft delete for message history
+    nu_id TEXT,  -- Node Unique ID - for federation tracking
+    reply_to_msg_uid TEXT,  -- msg_uid of the message being replied to
+    message_type TEXT NOT NULL DEFAULT 'normal',
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+    FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (reply_to_msg_uid) REFERENCES direct_messages(msg_uid) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_dm_msg_uid ON direct_messages(msg_uid);
+CREATE INDEX IF NOT EXISTS idx_dm_conversation ON direct_messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_dm_sender ON direct_messages(sender_id);
+CREATE INDEX IF NOT EXISTS idx_dm_sent_at ON direct_messages(sent_at DESC);
+CREATE INDEX IF NOT EXISTS idx_dm_reply_to ON direct_messages(reply_to_msg_uid);
+CREATE INDEX IF NOT EXISTS idx_dm_message_type ON direct_messages(message_type);
+
+-- Direct message media table - media attachments for messages
+CREATE TABLE IF NOT EXISTS direct_message_media (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    muid TEXT UNIQUE NOT NULL,  -- Media Unique ID
+    message_id INTEGER NOT NULL,
+    media_file_path TEXT NOT NULL,
+    alt_text TEXT,
+    origin_hostname TEXT,  -- For federation - where the media is stored
+    FOREIGN KEY (message_id) REFERENCES direct_messages(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_dm_media_message ON direct_message_media(message_id);
+CREATE INDEX IF NOT EXISTS idx_dm_media_muid ON direct_message_media(muid);
+
+-- Message requests table - handles requests from non-friends
+CREATE TABLE IF NOT EXISTS dm_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL,
+    requester_id INTEGER NOT NULL,  -- User who wants to message
+    recipient_id INTEGER NOT NULL,  -- User who needs to accept
+    status TEXT NOT NULL DEFAULT 'pending',  -- 'pending', 'accepted', 'declined'
+    requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    responded_at TIMESTAMP,
+    UNIQUE(conversation_id, recipient_id),  -- One request per recipient per conversation
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+    FOREIGN KEY (requester_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_dm_requests_recipient ON dm_requests(recipient_id);
+CREATE INDEX IF NOT EXISTS idx_dm_requests_status ON dm_requests(status);
+CREATE INDEX IF NOT EXISTS idx_dm_requests_conversation ON dm_requests(conversation_id);
+
+-- DM blocks table - user-level blocking for direct messages
+CREATE TABLE IF NOT EXISTS dm_blocks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    blocker_id INTEGER NOT NULL,  -- User doing the blocking
+    blocked_id INTEGER NOT NULL,  -- User being blocked
+    blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(blocker_id, blocked_id),  -- Can only block a user once
+    FOREIGN KEY (blocker_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (blocked_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_dm_blocks_blocker ON dm_blocks(blocker_id);
+CREATE INDEX IF NOT EXISTS idx_dm_blocks_blocked ON dm_blocks(blocked_id);
+
+
