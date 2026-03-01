@@ -32,7 +32,7 @@ services:
       # Optional: Set to production
       - FLASK_ENV=production
     restart: unless-stopped
-    command: gunicorn --bind 0.0.0.0:5000 --workers 4 --threads 2 --timeout 120 --access-logfile - --error-logfile - "app:app"
+    command: gunicorn --bind 0.0.0.0:5000 --worker-class gthread --workers 2 --threads 4 --timeout 120 --access-logfile - --error-logfile - "app:app"
 
 volumes:
   nebulae_data:

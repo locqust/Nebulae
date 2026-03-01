@@ -4890,7 +4890,7 @@ App.NotificationPolling = {
  * Populates the App.MessagePolling namespace.
  */
 App.MessagePolling = {
-    pollInterval: 10000, // Poll every 10 seconds (messages feel more urgent than notifications)
+    pollInterval: 30000, // Poll every 30 seconds
     pollTimer: null,
     lastCheckTimestamp: null,
     isPolling: false,
