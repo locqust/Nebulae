@@ -101,6 +101,55 @@ def ensure_profile_info_fields_exist(db):
     db.commit()
     print("Ensured default profile info fields exist for all users and groups.")
 
+# INSERT BEFORE: def init_db(app):
+
+def _run_sql_migrations(conn, app):
+    """
+    Applies any pending SQL migration files in order.
+    Migration files are named NNN_description.sql and tracked in the
+    schema_migrations table so each runs exactly once.
+    """
+    cursor = conn.cursor()
+
+    # Ensure the tracking table exists
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            migration_id TEXT UNIQUE NOT NULL,
+            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+
+    # Find all .sql migration files in the app root directory
+    import glob
+    migration_pattern = os.path.join(app.root_path, '[0-9][0-9][0-9]_*.sql')
+    migration_files = sorted(glob.glob(migration_pattern))
+
+    for filepath in migration_files:
+        migration_id = os.path.basename(filepath)
+
+        # Skip if already applied
+        cursor.execute("SELECT id FROM schema_migrations WHERE migration_id = ?", (migration_id,))
+        if cursor.fetchone():
+            continue
+
+        print(f"Applying migration: {migration_id}")
+        try:
+            with open(filepath, 'r') as f:
+                sql = f.read()
+            cursor.executescript(sql)
+            cursor.execute(
+                "INSERT INTO schema_migrations (migration_id) VALUES (?)", (migration_id,)
+            )
+            conn.commit()
+            print(f"Migration {migration_id} applied successfully.")
+        except sqlite3.Error as e:
+            print(f"ERROR applying migration {migration_id}: {e}")
+            conn.rollback()
+            # Don't raise — a failed migration shouldn't crash startup.
+            # Log it and continue; the feature simply won't work until fixed.
+
 def init_db(app):
     """
     Initializes the database schema.
@@ -199,6 +248,9 @@ def init_db(app):
             except sqlite3.Error as e:
                 print(f"Error during data correction: {e}")
                 init_conn.rollback()
+
+            # Run pending SQL migration files (e.g. 003_add_federation_outbox.sql)
+            _run_sql_migrations(init_conn, app)
 
             # Ensure profile info fields exist for all users and groups
             ensure_profile_info_fields_exist(init_conn)

@@ -85,6 +85,7 @@ def login():
         # Create a new session ID
         session_id = str(uuid.uuid4())
         session['session_id'] = session_id
+        session.permanent = True
         
         # Store session in the database
         create_user_session(user['id'], session_id, request.user_agent.string, request.remote_addr)

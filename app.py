@@ -35,7 +35,7 @@ from routes.push_notifications import push_notifications_bp
 from routes.parental import parental_bp
 
 # Application version
-__version__ = "0.9.3.1-beta"
+__version__ = "0.9.3.2-beta"
 
 app = Flask(__name__)
 Compress(app)
@@ -100,6 +100,9 @@ app.config['COMPRESS_MIMETYPES'] = [
    ]
 app.config['COMPRESS_LEVEL'] = 6
 app.config['COMPRESS_MIN_SIZE'] = 500
+# Persistent session lifetime - keeps PWA/browser sessions alive for 30 days
+from datetime import timedelta
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 
 # Application version
 app.config['APP_VERSION'] = __version__
@@ -116,6 +119,132 @@ from utils.scheduler import scheduler
 scheduler.init_app(app)
 scheduler.start()
 
+# Federation Recovery: On startup, request any missed payloads from connected nodes
+def _federation_recovery():
+    """
+    On startup, requests any federated payloads missed while this node was offline
+    and replays them through local endpoints. Runs once per process in background.
+    """
+    import time
+    import requests as _req
+    import json as _json
+    import hmac as _hmac
+    import hashlib as _hash
+    from utils.federation_utils import get_remote_node_api_url
+
+    time.sleep(8)  # Wait for gunicorn workers to fully bind
+
+    with app.app_context():
+        try:
+            from db_queries.federation import (
+                get_all_connected_nodes, update_node_last_sync
+            )
+            from datetime import datetime, timedelta
+
+            nodes = [n for n in get_all_connected_nodes()
+                     if n['status'] == 'connected'
+                     and n.get('shared_secret')
+                     and n.get('connection_type') == 'full']
+
+            if not nodes:
+                print("federation_recovery: No connected full nodes, skipping.")
+                return
+
+            local_hostname = app.config.get('NODE_HOSTNAME')
+            insecure_mode = app.config.get('FEDERATION_INSECURE_MODE', False)
+            # Always use internal container port - external port mapping is irrelevant here
+            local_base = "http://127.0.0.1:5000"
+
+            for node in nodes:
+                hostname = node['hostname']
+                shared_secret = node['shared_secret']
+
+                # Use last_sync_at if we have it, otherwise fall back to 24 hours ago
+                since = node.get('last_sync_at')
+                if not since:
+                    since = (datetime.utcnow() - timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')
+
+                try:
+                    # Step 1: Ask remote node for everything it tried to send us since `since`
+                    req_payload = _json.dumps({'since': since}, sort_keys=True).encode('utf-8')
+                    sig = _hmac.new(
+                        shared_secret.encode('utf-8'),
+                        msg=req_payload,
+                        digestmod=_hash.sha256
+                    ).hexdigest()
+                    catchup_headers = {
+                        'Content-Type': 'application/json',
+                        'X-Node-Hostname': local_hostname,
+                        'X-Node-Signature': sig
+                    }
+                    catchup_url = get_remote_node_api_url(
+                        hostname, '/federation/api/v1/catchup', insecure_mode
+                    )
+                    response = _req.post(
+                        catchup_url, data=req_payload, headers=catchup_headers,
+                        timeout=30, verify=not insecure_mode
+                    )
+                    response.raise_for_status()
+
+                    items = response.json().get('items', [])
+                    if not items:
+                        print(f"federation_recovery: No missed items from {hostname}.")
+                        update_node_last_sync(hostname)
+                        continue
+
+                    print(f"federation_recovery: Replaying {len(items)} missed items from {hostname}.")
+
+                    # Step 2: Replay each item against our own local endpoints.
+                    # We sign as the remote node so @signature_required accepts them normally.
+                    # All existing handlers are already idempotent (CUIDs, msg_uids, etc.)
+                    processed = 0
+                    for item in items:
+                        endpoint = item.get('endpoint')
+                        method = item.get('method', 'POST')
+                        payload_dict = item.get('payload', {})
+
+                        if not endpoint or not payload_dict:
+                            continue
+
+                        try:
+                            replay_body = _json.dumps(payload_dict, sort_keys=True).encode('utf-8')
+                            replay_sig = _hmac.new(
+                                shared_secret.encode('utf-8'),
+                                msg=replay_body,
+                                digestmod=_hash.sha256
+                            ).hexdigest()
+                            replay_headers = {
+                                'Content-Type': 'application/json',
+                                'X-Node-Hostname': hostname,
+                                'X-Node-Signature': replay_sig
+                            }
+                            local_url = f"{local_base}{endpoint}"
+                            # Fire and don't stress about the response status —
+                            # 404s for already-deleted content are expected and harmless
+                            _req.request(
+                                method, local_url, data=replay_body,
+                                headers=replay_headers, timeout=10
+                            )
+                            processed += 1
+                        except Exception as item_err:
+                            print(f"federation_recovery: Failed to replay {endpoint}: {item_err}")
+
+                    print(f"federation_recovery: Replayed {processed}/{len(items)} items from {hostname}.")
+                    update_node_last_sync(hostname)
+
+                except _req.RequestException as e:
+                    print(f"federation_recovery: Could not reach {hostname} (still offline?): {e}")
+                except Exception as e:
+                    print(f"federation_recovery: Unexpected error for {hostname}: {e}")
+                    traceback.print_exc()
+
+        except Exception as e:
+            print(f"federation_recovery: Fatal startup error: {e}")
+            traceback.print_exc()
+
+import threading
+_recovery_thread = threading.Thread(target=_federation_recovery, daemon=True)
+_recovery_thread.start()
 
 @app.before_request
 def before_request_tasks():

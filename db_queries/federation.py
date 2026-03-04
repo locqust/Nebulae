@@ -32,6 +32,18 @@ def _send_single_request_in_thread(method, url, data, headers, verify_ssl):
         print(f"ERROR: An unexpected error occurred in background notification thread for {url}:")
         traceback.print_exc()
 
+def _log_outbox_if_possible(hostname, endpoint, method, payload_dict):
+    """
+    Logs an outbound federated payload to the outbox. 
+    Called from db_queries/federation.py senders that don't go through federation_utils.
+    Never raises — outbox logging must never break federation delivery.
+    """
+    try:
+        import json as _json
+        log_federation_outbox(hostname, endpoint, method, _json.dumps(payload_dict, sort_keys=True))
+    except Exception as e:
+        print(f"WARN: federation_outbox: Failed to log outbound payload to {hostname}: {e}")
+
 def get_node_nu_id():
     """Retrieves the Node Unique ID (NUID) from the config table."""
     db = get_db()
@@ -121,12 +133,13 @@ def create_pairing_token(token, user_id, expires_at):
         return False
 
 def get_all_connected_nodes():
-    """RetrieVes all connected nodes from the database."""
+    """Retrieves all connected nodes from the database."""
     db = get_db()
     cursor = db.cursor()
     cursor.execute("""
         SELECT id, hostname, nickname, status, shared_secret, origin_nu_id,
-               connection_type, resource_type, resource_puid, resource_name
+               connection_type, resource_type, resource_puid, resource_name,
+               last_sync_at
         FROM connected_nodes 
         ORDER BY connection_type, hostname
     """)
@@ -495,6 +508,7 @@ def notify_remote_node_of_group_join_request(user, group):
             'Content-Type': 'application/json'
         }
 
+        _log_outbox_if_possible(remote_hostname, '/federation/api/v1/group_join_request_created', 'POST', payload)
         thread = threading.Thread(
             target=_send_single_request_in_thread,
             args=('POST', remote_url, request_body, headers, verify_ssl)
@@ -552,6 +566,7 @@ def notify_remote_node_of_acceptance(sender_user, receiver_user):
             'Content-Type': 'application/json'
         }
 
+        _log_outbox_if_possible(remote_hostname, '/federation/api/v1/friend_request_accepted', 'POST', payload)
         thread = threading.Thread(
             target=_send_single_request_in_thread,
             args=('POST', remote_url, request_body, headers, verify_ssl)
@@ -601,6 +616,7 @@ def notify_remote_node_of_rejection(sender_user, receiver_user):
             'Content-Type': 'application/json'
         }
         
+        _log_outbox_if_possible(sender_user['hostname'], '/federation/api/v1/friend_request_rejected', 'POST', payload)
         thread = threading.Thread(
             target=_send_single_request_in_thread,
             args=('POST', remote_url, request_body, headers, not insecure_mode)
@@ -662,6 +678,7 @@ def notify_remote_node_of_group_rejection(user, group, rejection_reason=None):
             'Content-Type': 'application/json'
         }
         
+        _log_outbox_if_possible(user['hostname'], '/federation/api/v1/group_request_rejected', 'POST', payload)
         thread = threading.Thread(
             target=_send_single_request_in_thread,
             args=('POST', remote_url, request_body, headers, not insecure_mode)
@@ -726,6 +743,7 @@ def notify_remote_node_of_group_acceptance(user, group):
             'Content-Type': 'application/json'
         }
 
+        _log_outbox_if_possible(remote_hostname, '/federation/api/v1/group_request_accepted', 'POST', payload)
         thread = threading.Thread(
             target=_send_single_request_in_thread,
             args=('POST', remote_url, request_body, headers, verify_ssl)
@@ -783,6 +801,7 @@ def notify_remote_node_of_unfriend(local_user, remote_user):
             'Content-Type': 'application/json'
         }
         
+        _log_outbox_if_possible(remote_hostname, '/federation/api/v1/receive_unfriend', 'POST', payload)
         thread = threading.Thread(
             target=_send_single_request_in_thread,
             args=('POST', remote_url, request_body, headers, verify_ssl)
@@ -840,6 +859,7 @@ def notify_remote_node_of_leave_group(leaver_user, group):
             'Content-Type': 'application/json'
         }
 
+        _log_outbox_if_possible(remote_hostname, '/federation/api/v1/receive_leave_group', 'POST', payload)
         thread = threading.Thread(
             target=_send_single_request_in_thread,
             args=('POST', remote_url, request_body, headers, verify_ssl)
@@ -903,6 +923,7 @@ def notify_remote_node_of_group_removal(user, group, removal_type='kick'):
             'Content-Type': 'application/json'
         }
         
+        _log_outbox_if_possible(user['hostname'], '/federation/api/v1/group_member_removed', 'POST', payload)
         response = requests.post(remote_url, data=request_body, headers=headers, timeout=10, verify=verify_ssl)
         response.raise_for_status()
         
@@ -1359,3 +1380,71 @@ def get_or_create_dm_targeted_subscription(hostname, user_puid, user_display_nam
         resource_puid=user_puid,
         resource_name=user_display_name
     )
+
+def log_federation_outbox(target_hostname, endpoint, method, payload_str):
+    """
+    Logs an outbound federated payload to the outbox table.
+    Used for catch-up/recovery when a node comes back online after downtime.
+    Auto-purges entries older than 30 days to keep the table bounded.
+    """
+    import random
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO federation_outbox (target_hostname, endpoint, method, payload)
+        VALUES (?, ?, ?, ?)
+    """, (target_hostname, endpoint, method, payload_str))
+
+    # Probabilistic purge: 1% chance on any given write to clean up old entries
+    if random.randint(1, 100) == 1:
+        cursor.execute("""
+            DELETE FROM federation_outbox 
+            WHERE created_at < datetime('now', '-30 days')
+        """)
+
+    db.commit()
+
+
+def get_federation_outbox_for_node(target_hostname, since_dt):
+    """
+    Retrieves all outbox entries for a specific node since a given datetime.
+    Used by the catch-up endpoint to return missed payloads to a recovering node.
+    Returns list of dicts with endpoint, method, payload (parsed dict), created_at.
+    """
+    import json as _json
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("""
+        SELECT endpoint, method, payload, created_at
+        FROM federation_outbox
+        WHERE target_hostname = ?
+          AND created_at > ?
+        ORDER BY created_at ASC
+    """, (target_hostname, since_dt.strftime('%Y-%m-%d %H:%M:%S')))
+
+    results = []
+    for row in cursor.fetchall():
+        try:
+            results.append({
+                'endpoint': row['endpoint'],
+                'method': row['method'],
+                'payload': _json.loads(row['payload']),
+                'created_at': row['created_at']
+            })
+        except (_json.JSONDecodeError, Exception) as e:
+            print(f"WARN: get_federation_outbox_for_node: Skipping malformed payload: {e}")
+    return results
+
+
+def update_node_last_sync(hostname):
+    """
+    Updates the last_sync_at timestamp for a connected node after a successful catch-up.
+    This becomes the `since` value for the next recovery request.
+    """
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("""
+        UPDATE connected_nodes SET last_sync_at = datetime('now')
+        WHERE hostname = ? AND connection_type = 'full'
+    """, (hostname,))
+    db.commit()

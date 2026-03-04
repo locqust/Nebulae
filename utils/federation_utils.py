@@ -83,6 +83,16 @@ def _send_federated_request(method, endpoint, payload, nodes_to_notify, node_sec
         return
 
     request_body = json.dumps(payload, sort_keys=True).encode('utf-8')
+    payload_str = json.dumps(payload, sort_keys=True)
+
+    # Log to outbox for federation recovery (catch-up after node downtime)
+    try:
+        from db_queries.federation import log_federation_outbox
+        for hostname in nodes_to_notify:
+            log_federation_outbox(hostname, endpoint, method, payload_str)
+    except Exception as e:
+        # Never let outbox logging break federation delivery
+        print(f"WARN: federation_outbox: Failed to log outbound payload: {e}")
 
     for hostname in nodes_to_notify:
         # Use pre-built secrets if provided (avoids DB call in thread context)

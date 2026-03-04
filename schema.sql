@@ -433,6 +433,7 @@ CREATE TABLE IF NOT EXISTS connected_nodes (
     status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'connected', 'blocked'
     shared_secret TEXT, -- A long, secure key for signing API requests
     origin_nu_id TEXT, -- The NUID of the remote node
+    last_sync_at TIMESTAMP, -- Last successful catch-up sync from this node
     connection_type TEXT NOT NULL DEFAULT 'full', -- 'full' (admin-created), 'targeted' (auto-created for specific resources)
     resource_type TEXT, -- 'group', 'public_page' (only for targeted connections)
     resource_puid TEXT, -- PUID of the specific group or page (only for targeted connections)
@@ -440,6 +441,19 @@ CREATE TABLE IF NOT EXISTS connected_nodes (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(hostname, connection_type, resource_puid) -- Allow one full connection and multiple targeted ones per hostname
 );
+
+-- FEDERATION: Outbox log for catch-up/recovery after node downtime
+CREATE TABLE IF NOT EXISTS federation_outbox (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    target_hostname TEXT NOT NULL,         -- The node this was sent to
+    endpoint TEXT NOT NULL,                -- e.g. '/federation/inbox' or '/federation/api/v1/receive_dm_message'
+    method TEXT NOT NULL DEFAULT 'POST',   -- HTTP method
+    payload TEXT NOT NULL,                 -- JSON payload (already serialised)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_federation_outbox_hostname_time 
+    ON federation_outbox(target_hostname, created_at);
 
 -- FEDERATION: Table for one-time pairing tokens
 CREATE TABLE IF NOT EXISTS pairing_tokens (

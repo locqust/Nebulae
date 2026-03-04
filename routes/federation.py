@@ -524,7 +524,6 @@ def receive_mention():
         traceback.print_exc()
         return jsonify({'error': f'An internal error occurred: {str(e)}'}), 500
 
-
 @federation_bp.route('/federation/api/v1/receive_friend_request', methods=['POST'])
 @signature_required
 def receive_friend_request():
@@ -3027,3 +3026,40 @@ def receive_dm_request_declined():
     except Exception as e:
         traceback.print_exc()
         return jsonify({'error': f'Internal error: {str(e)}'}), 500
+
+
+@federation_bp.route('/federation/api/v1/catchup', methods=['POST'])
+@signature_required
+def federation_catchup():
+    """
+    Called by a recovering node on startup to request any payloads it missed
+    while offline. Returns the logged outbox entries for that node since `since`.
+    
+    The requesting node replays each item against its own local federation 
+    endpoints — no special processing needed here, we just return the log.
+    
+    Payload: { "since": "2026-01-15 10:30:00" }
+    Response: { "items": [ { "endpoint": "...", "method": "...", "payload": {...} }, ... ] }
+    """
+    try:
+        data = request.get_json()
+        since_str = data.get('since') if data else None
+        requesting_hostname = request.headers.get('X-Node-Hostname')  # Already verified
+
+        if not since_str:
+            return jsonify({'error': 'since timestamp required'}), 400
+
+        try:
+            since_dt = datetime.fromisoformat(since_str.replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            return jsonify({'error': 'Invalid since timestamp format. Use ISO 8601.'}), 400
+
+        from db_queries.federation import get_federation_outbox_for_node
+        items = get_federation_outbox_for_node(requesting_hostname, since_dt)
+
+        print(f"federation_catchup: Returning {len(items)} missed items to recovering node {requesting_hostname} since {since_str}")
+        return jsonify({'items': items, 'count': len(items)}), 200
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'An internal error occurred: {str(e)}'}), 500
