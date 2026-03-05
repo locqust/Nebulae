@@ -4,7 +4,7 @@
 # Site settings
 title: Nebulae Documentation
 description: Privacy-focused, federated social media platform
-baseurl: "/Nebulae" # Change to your repo name if docs are in main repo
+baseurl: "https://github.com/locqust/Nebulae/releases/latest" # Change to your repo name if docs are in main repo
 url: "https://locqust.github.io" # Your GitHub Pages URL
 
 # Theme
