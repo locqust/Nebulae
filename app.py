@@ -35,7 +35,7 @@ from routes.push_notifications import push_notifications_bp
 from routes.parental import parental_bp
 
 # Application version
-__version__ = "0.9.3.2-beta"
+__version__ = "0.9.3.3-beta"
 
 app = Flask(__name__)
 Compress(app)
@@ -621,6 +621,17 @@ def format_date_filter(date_string):
         return date_obj.strftime('%d/%m/%Y')
     except (ValueError, TypeError):
         return date_string
+    
+def format_full_date_filter(date_string):
+    if not date_string:
+        return ""
+    try:
+        date_obj = datetime.datetime.strptime(str(date_string), '%Y-%m-%d')
+        day = date_obj.day
+        suffix = 'th' if 11 <= day <= 13 else {1: 'st', 2: 'nd', 3: 'rd'}.get(day % 10, 'th')
+        return date_obj.strftime(f'%-d{suffix} %B %Y')
+    except (ValueError, TypeError):
+        return date_string
 
 def format_timestamp_filter(timestamp_string):
     if not timestamp_string:
@@ -683,6 +694,7 @@ app.jinja_env.filters['js_string'] = js_string_filter
 app.jinja_env.filters['linkify_mentions'] = linkify_mentions
 app.jinja_env.filters['linkify_urls'] = linkify_urls
 app.jinja_env.filters['format_date'] = format_date_filter
+app.jinja_env.filters['format_full_date'] = format_full_date_filter
 app.jinja_env.filters['format_timestamp'] = format_timestamp_filter
 # NEW: Register the comment count filter
 app.jinja_env.filters['count_all_comments'] = count_all_comments

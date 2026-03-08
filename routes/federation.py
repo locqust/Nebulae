@@ -1281,6 +1281,9 @@ def receive_federated_action():
                 comments_disabled=data.get('comments_disabled', False), # NEW: Add this
                 tagged_user_puids=data.get('tagged_user_puids', []),  # NEW: Tagged users
                 location=data.get('location'),
+                post_type=data.get('post_type', 'normal'),
+                life_event_type=data.get('life_event_type'),
+                life_event_date=data.get('life_event_date'),
                 timestamp=data.get('timestamp')
             )
 

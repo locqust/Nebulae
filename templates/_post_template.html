@@ -33,6 +33,53 @@
         </div>
         {# original_post is already defined above #}
     {% endif %}
+    {# LIFE EVENT: Display distinctive banner if this is a life event post #}
+    {% if original_post.post_type == 'life_event' %}
+        {% set life_event_labels = {
+            'started_job': ('started_job.png', 'Started A New Job'),
+            'left_job': ('left_job.png', 'Left A Job'),
+            'new_relationship': ('new_relationship.png', 'In A New Relationship'),
+            'engaged': ('engaged.png', 'Got Engaged!'),
+            'married': ('married.png', 'Got Married!'),
+            'separated': ('separated.png', 'Separated'),
+            'had_baby': ('had_baby.png', 'Had A Baby'),
+            'moved': ('moved.png', 'Moved Home'),
+            'graduated': ('graduated.png', 'Graduated'),
+            'lost_loved_one': ('lost_loved_one.png', 'Lost A Loved One'),
+            'new_pet': ('new_pet.png', 'Got A New Pet'),
+            'travelled': ('travelled.png', 'Travelled Abroad'),
+            'custom': ('custom.png', 'Life Event')
+        } %}
+        {% set event_info = life_event_labels.get(original_post.life_event_type, ('custom.png', 'Life event')) %}
+        <div class="life-event-banner -mx-4 -mt-4 mb-4 rounded-t-lg relative overflow-hidden flex flex-col items-center justify-center text-center gap-3 py-10 px-4"
+            style="min-height: 160px;">
+            {# Nebula background #}
+            <div class="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-90"
+                 style="background-image: url('{{ url_for('static', filename='images/branding/background_1920x1080.png') }}');"></div>
+            {# Glass overlay #}
+            <div class="absolute inset-0 backdrop-blur-sm bg-gray-900/25"></div>
+            {# Edge vignette fade #}
+            <div class="absolute inset-0" style="background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.55) 100%);"></div>
+            {# Content #}
+            <div class="relative z-10 flex flex-col items-center gap-3">
+                <img src="{{ url_for('static', filename='images/life_events/' + event_info[0]) }}"
+                     alt="{{ event_info[1] }}"
+                     class="object-contain"
+                     style="width: 220px; height: 220px; border-radius: 28px; box-shadow: 0 12px 40px rgba(0,0,0,0.7), 0 0 40px rgba(139,92,246,0.5);"
+                     onerror="this.style.display='none'">
+                <p class="text-white font-extrabold tracking-wide"
+                   style="font-size: 2.5rem; text-shadow: 0 0 30px rgba(167,139,250,0.9), 0 0 60px rgba(139,92,246,0.6), 0 2px 8px rgba(0,0,0,0.9);">
+                    {{ event_info[1] }}
+                </p>
+                {% if original_post.life_event_date %}
+                    <p class="font-bold tracking-widest uppercase"
+                       style="font-size: 1.00rem; color: #c4b5fd; text-shadow: 0 0 20px rgba(167,139,250,0.8), 0 1px 6px rgba(0,0,0,0.8); letter-spacing: 0.15em;">
+                        {{ original_post.life_event_date | format_full_date }}
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
     <div class="flex justify-between items-start mb-1">
         <div class="flex items-start gap-2 flex-1 min-w-0">
             <!-- Profile Picture (fixed, doesn't wrap) -->

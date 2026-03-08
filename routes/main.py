@@ -1137,6 +1137,71 @@ def create_post():
 
     return redirect(request.referrer or url_for('main.index'))
 
+@main_bp.route('/create_life_event', methods=['POST'])
+def create_life_event():
+    """
+    Allows a logged-in user to create a life event post.
+    Life events appear on the user's own timeline only.
+    """
+    if 'username' not in session or session.get('is_admin'):
+        flash('Please log in as a regular user to create life events.', 'danger')
+        return redirect(url_for('auth.login'))
+
+    current_user = get_user_by_username(session['username'])
+    if not current_user:
+        flash('Your user account could not be found.', 'danger')
+        return redirect(url_for('auth.login'))
+
+    life_event_type = request.form.get('life_event_type', '').strip()
+    content = request.form.get('content', '').strip() or None
+    privacy_setting = request.form.get('privacy_setting', 'friends')
+    life_event_date_str = request.form.get('life_event_date', '').strip()
+    tagged_user_puids_json = request.form.get('tagged_users', '[]')
+    location = request.form.get('location', '').strip() or None
+
+    if not life_event_type:
+        flash('Please select a life event type.', 'danger')
+        return redirect(request.referrer or url_for('main.index'))
+
+    # Validate life_event_date
+    life_event_date = None
+    if life_event_date_str:
+        try:
+            from datetime import date
+            life_event_date = date.fromisoformat(life_event_date_str).isoformat()
+        except ValueError:
+            flash('Invalid date for life event.', 'danger')
+            return redirect(request.referrer or url_for('main.index'))
+
+    try:
+        tagged_user_puids = json.loads(tagged_user_puids_json) if tagged_user_puids_json else []
+    except json.JSONDecodeError:
+        tagged_user_puids = []
+
+    # Life events always live on the author's own profile timeline
+    try:
+        post_cuid = add_post(
+            user_id=current_user['id'],
+            profile_user_id=current_user['id'],
+            content=content,
+            privacy_setting=privacy_setting,
+            tagged_user_puids=tagged_user_puids,
+            location=location,
+            post_type='life_event',
+            life_event_type=life_event_type,
+            life_event_date=life_event_date
+        )
+        if post_cuid:
+            distribute_post(post_cuid)
+            flash('Life event added!', 'success')
+        else:
+            flash('Failed to create life event.', 'danger')
+    except Exception as e:
+        flash(f'An error occurred: {e}', 'danger')
+        traceback.print_exc()
+
+    return redirect(url_for('main.user_profile', puid=current_user['puid']))
+
 @main_bp.route('/repost/<string:cuid>', methods=['POST'])
 def repost_route(cuid):
     """Allows a logged-in user to repost a public post to their own timeline."""
@@ -1732,6 +1797,7 @@ def user_profile(puid):
     """
     Displays a user's profile page. Handles both local and remote users.
     """
+    from datetime import date
     viewer_token = request.args.get('viewer_token')
     if viewer_token:
         session['viewer_token'] = viewer_token
@@ -1933,10 +1999,8 @@ def user_profile(puid):
                            friends_count=friends_count,
                            current_user_requires_parental_approval=current_user_requires_parental_approval,
                            profile_user_requires_parental_approval=profile_user_requires_parental_approval,
-                           # --- FIX: START ---
-                           # Pass the new variable to the template
-                           current_viewer_data=current_viewer_data
-                           # --- FIX: END ---
+                           current_viewer_data=current_viewer_data,
+                           today_date=date.today().isoformat()
                            )
 
 # NEW: Route for public pages

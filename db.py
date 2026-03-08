@@ -138,7 +138,19 @@ def _run_sql_migrations(conn, app):
         try:
             with open(filepath, 'r') as f:
                 sql = f.read()
-            cursor.executescript(sql)
+            # Execute statements individually so that ALTER TABLE "duplicate column"
+            # errors don't abort the whole migration. This happens on fresh installs
+            # where schema.sql already includes columns that a migration also adds.
+            statements = [s.strip() for s in sql.split(';') if s.strip()]
+            for statement in statements:
+                try:
+                    cursor.execute(statement)
+                except sqlite3.OperationalError as stmt_err:
+                    err_msg = str(stmt_err).lower()
+                    if 'duplicate column' in err_msg or 'already exists' in err_msg:
+                        print(f"  Skipping already-applied statement: {statement[:60]}...")
+                    else:
+                        raise  # Re-raise anything unexpected
             cursor.execute(
                 "INSERT INTO schema_migrations (migration_id) VALUES (?)", (migration_id,)
             )

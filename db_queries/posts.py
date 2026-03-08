@@ -20,7 +20,7 @@ import sqlite3
 
 # MODIFICATION: Added 'comments_disabled=False' to the function definition
 # NEW: Added 'tagged_user_puids=None' and 'location=None' parameters
-def add_post(user_id, profile_user_id, content, privacy_setting='local', media_files=None, nu_id=None, cuid=None, author_puid=None, profile_puid=None, group_puid=None, is_remote=False, author_hostname=None, is_repost=False, original_post_cuid=None, event_id=None, comments_disabled=False, tagged_user_puids=None, location=None, poll_data=None, timestamp=None):
+def add_post(user_id, profile_user_id, content, privacy_setting='local', media_files=None, nu_id=None, cuid=None, author_puid=None, profile_puid=None, group_puid=None, is_remote=False, author_hostname=None, is_repost=False, original_post_cuid=None, event_id=None, comments_disabled=False, tagged_user_puids=None, location=None, poll_data=None, timestamp=None, post_type='normal', life_event_type=None, life_event_date=None):
     """Adds a new post or repost, links media, and creates notifications."""
     # CIRCULAR IMPORT FIX: Import federation functions here
     from .federation import send_remote_mention_notification, send_remote_notification
@@ -74,14 +74,14 @@ def add_post(user_id, profile_user_id, content, privacy_setting='local', media_f
     # Use provided timestamp or let database default to CURRENT_TIMESTAMP
     if timestamp:
         cursor.execute("""
-            INSERT INTO posts (cuid, user_id, profile_user_id, author_puid, profile_puid, group_id, content, privacy_setting, nu_id, is_remote, is_repost, original_post_cuid, event_id, comments_disabled, tagged_user_puids, location, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (cuid, user_id, profile_user_id, author_puid, profile_puid, group_id, content, privacy_setting, nu_id, is_remote, is_repost, original_post_cuid, event_id, comments_disabled, tagged_puids_json, location, timestamp))
+            INSERT INTO posts (cuid, user_id, profile_user_id, author_puid, profile_puid, group_id, content, privacy_setting, nu_id, is_remote, is_repost, original_post_cuid, event_id, comments_disabled, tagged_user_puids, location, timestamp, post_type, life_event_type, life_event_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (cuid, user_id, profile_user_id, author_puid, profile_puid, group_id, content, privacy_setting, nu_id, is_remote, is_repost, original_post_cuid, event_id, comments_disabled, tagged_puids_json, location, timestamp, post_type, life_event_type, life_event_date))
     else:
         cursor.execute("""
-            INSERT INTO posts (cuid, user_id, profile_user_id, author_puid, profile_puid, group_id, content, privacy_setting, nu_id, is_remote, is_repost, original_post_cuid, event_id, comments_disabled, tagged_user_puids, location)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (cuid, user_id, profile_user_id, author_puid, profile_puid, group_id, content, privacy_setting, nu_id, is_remote, is_repost, original_post_cuid, event_id, comments_disabled, tagged_puids_json, location))
+            INSERT INTO posts (cuid, user_id, profile_user_id, author_puid, profile_puid, group_id, content, privacy_setting, nu_id, is_remote, is_repost, original_post_cuid, event_id, comments_disabled, tagged_user_puids, location, post_type, life_event_type, life_event_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (cuid, user_id, profile_user_id, author_puid, profile_puid, group_id, content, privacy_setting, nu_id, is_remote, is_repost, original_post_cuid, event_id, comments_disabled, tagged_puids_json, location, post_type, life_event_type, life_event_date))
     post_id = cursor.lastrowid
 
     if media_files and not is_repost:
@@ -130,6 +130,7 @@ def add_post(user_id, profile_user_id, content, privacy_setting='local', media_f
     # Notification logic only runs for posts created directly on this node.
     if not is_remote and user_id:
         actor_id = user_id
+        already_notified = set()  # Initialise here so it's always available
 
         # If it's a repost, notify the original author
         if is_repost and original_post_cuid:

@@ -1,0 +1,119 @@
+{# templates/_life_event_modal.html #}
+<div id="lifeEventModal" class="modal hidden">
+    <div class="modal-content max-w-lg w-full">
+        <span class="close-button" onclick="App.Modal.close('lifeEventModal')">&times;</span>
+        <h2 class="text-xl font-bold mb-4 primary-text">Add a Life Event</h2>
+
+        <form action="{{ url_for('main.create_life_event') }}" method="POST">
+
+            {# Event type picker #}
+            <div class="mb-4">
+                <label class="block text-sm font-medium secondary-text mb-2">Event Type</label>
+                <div class="grid grid-cols-2 gap-2" id="life-event-type-grid">
+                    {% set event_types = [
+                        ('started_job', 'started_job.png', 'Started A New Job'),
+                        ('left_job', 'left_job.png', 'Left A Job'),
+                        ('new_relationship', 'new_relationship.png', 'In a New Relationship'),
+                        ('engaged', 'engaged.png', 'Got Engaged!'),
+                        ('married', 'married.png', 'Got Married!'),
+                        ('separated', 'separated.png', 'Separated'),
+                        ('had_baby', 'had_baby.png', 'Had A Baby'),
+                        ('moved', 'moved.png', 'Moved Home'),
+                        ('graduated', 'graduated.png', 'Graduated'),
+                        ('lost_loved_one', 'lost_loved_one.png', 'Lost A Loved One'),
+                        ('new_pet', 'new_pet.png', 'Got A New Pet'),
+                        ('travelled', 'travelled.png', 'Travelled Abroad'),
+                        ('custom', 'custom.png', 'Custom'),
+                    ] %}
+                    {% for type_key, icon_file, label in event_types %}
+                    <label class="life-event-type-option flex items-center gap-2 p-2 rounded-lg border cursor-pointer hover:border-purple-400 transition-colors"
+                           data-type="{{ type_key }}">
+                        <input type="radio" name="life_event_type" value="{{ type_key }}"
+                               class="sr-only life-event-radio">
+                        <img src="{{ url_for('static', filename='images/life_events/' + icon_file) }}"
+                             alt="{{ label }}"
+                             class="w-6 h-6 object-contain"
+                             onerror="this.style.display='none'">
+                        <span class="text-sm primary-text">{{ label }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                {# Hidden actual input — set by JS when radio selected #}
+                <input type="hidden" name="life_event_type" id="life_event_type_value">
+            </div>
+
+            {# Date picker — defaults to today, allows backdating #}
+            <div class="mb-4">
+                <label for="life_event_date" class="block text-sm font-medium secondary-text mb-1">
+                    When did this happen?
+                </label>
+                <input type="date" name="life_event_date" id="life_event_date"
+                       class="w-full p-2 border rounded-lg primary-bg primary-text"
+                       max="{{ today_date }}" value="{{ today_date }}">
+                <p class="text-xs secondary-text mt-1">You can backdate events that happened in the past.</p>
+            </div>
+
+            {# Optional tag a friend (shown for relational events) #}
+            <div class="mb-4" id="life-event-tag-section" style="display:none;">
+                <label class="block text-sm font-medium secondary-text mb-1">
+                    Tag someone with you <span class="text-xs">(optional)</span>
+                </label>
+                <div id="life-event-friend-search">
+                    <input type="text" id="life_event_friend_input"
+                           placeholder="Search friends..."
+                           class="w-full p-2 border rounded-lg primary-bg primary-text text-sm"
+                           autocomplete="off">
+                    <div id="life_event_friend_results" class="mt-1 border rounded-lg max-h-40 overflow-y-auto hidden primary-bg"></div>
+                </div>
+                <div id="life_event_tagged_display" class="mt-2 flex flex-wrap gap-2"></div>
+                <input type="hidden" name="tagged_users" id="life_event_tagged_users_input" value="[]">
+            </div>
+
+            {# Optional location #}
+            <div class="mb-4" id="life-event-location-section">
+                <label for="life_event_location" class="block text-sm font-medium secondary-text mb-1">
+                    Location <span class="text-xs">(optional)</span>
+                </label>
+                <input type="text" name="location" id="life_event_location"
+                       placeholder="e.g. Paris, France"
+                       class="w-full p-2 border rounded-lg primary-bg primary-text text-sm"
+                       autocomplete="off">
+            </div>
+
+            {# Optional caption #}
+            <div class="mb-4">
+                <label for="life_event_content" class="block text-sm font-medium secondary-text mb-1">
+                    Add a caption <span class="text-xs">(optional)</span>
+                </label>
+                <textarea name="content" id="life_event_content" rows="3"
+                          placeholder="Tell your story..."
+                          class="w-full p-2 border rounded-lg primary-bg primary-text text-sm resize-none"></textarea>
+            </div>
+
+            {# Privacy #}
+            <div class="mb-4">
+                <label for="life_event_privacy" class="block text-sm font-medium secondary-text mb-1">
+                    Who can see this?
+                </label>
+                <select name="privacy_setting" id="life_event_privacy"
+                        class="w-full p-2 border rounded-lg primary-bg primary-text text-sm">
+                    <option value="friends">Friends</option>
+                    <option value="local">Local</option>
+                    <option value="public">Public</option>
+                </select>
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <button type="button" onclick="App.Modal.close('lifeEventModal')"
+                        class="px-4 py-2 text-sm rounded-lg border secondary-text hover:bg-gray-100 dark:hover:bg-gray-700">
+                    Cancel
+                </button>
+                <button type="submit" id="life_event_submit_btn"
+                        class="px-4 py-2 text-sm rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+                        disabled>
+                    Add Life Event
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

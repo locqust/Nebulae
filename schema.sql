@@ -30,18 +30,6 @@ CREATE TABLE IF NOT EXISTS user_sessions (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- NEW: Table for user sessions
-CREATE TABLE IF NOT EXISTS user_sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    session_id TEXT UNIQUE NOT NULL,
-    user_agent TEXT,
-    ip_address TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
 -- NEW: Table for two-factor authentication
 CREATE TABLE IF NOT EXISTS user_2fa (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -105,6 +93,9 @@ CREATE TABLE IF NOT EXISTS posts (
     comments_disabled BOOLEAN DEFAULT FALSE NOT NULL, -- NEW: Ability to turn off comments
     tagged_user_puids TEXT, -- NEW: JSON array of PUIDs for users tagged in the post
     location TEXT, -- NEW: Location string for check-ins
+    post_type TEXT NOT NULL DEFAULT 'normal', -- NEW: 'normal' or 'life_event'
+    life_event_type TEXT, -- NEW: e.g. 'new_job', 'married', 'moved', etc.
+    life_event_date DATE, -- NEW: The actual date of the life event (for backdating)
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (profile_user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
@@ -397,8 +388,8 @@ CREATE TABLE IF NOT EXISTS notifications (
     FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
     FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE,
-    FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
-	FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+    FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+	FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
     FOREIGN KEY (media_id) REFERENCES post_media(id) ON DELETE CASCADE,
     FOREIGN KEY (media_comment_id) REFERENCES media_comments(id) ON DELETE CASCADE
 );
