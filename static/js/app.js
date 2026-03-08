@@ -43,6 +43,7 @@ const App = {
     Events: {},
     Privacy: {},  // NEW: Privacy actions module
     Parental: {},
+    LifeEvent: {},
     Sidebar: {},
     Router: {},
     NewPostsPolling: {},
@@ -1957,6 +1958,14 @@ App.Router = {
                     }
                 }
             }, 200);
+        }
+
+        // LifeEvent module - init if modal is present (index.html SPA includes it at page load)
+        if (document.getElementById('lifeEventModal') &&
+            App.LifeEvent && typeof App.LifeEvent.init === 'function' &&
+            !document.getElementById('lifeEventModal').dataset.listenerAttached) {
+            App.LifeEvent.init();
+            document.getElementById('lifeEventModal').dataset.listenerAttached = 'true';
         }
 
         // Preload and initialize page-specific modules
@@ -7220,6 +7229,158 @@ App.DM = {
     },
 };
 
+
+App.LifeEvent = {
+    _selectedType: null,
+    _taggedFriends: [],
+
+    // Event types that show the "tag someone" section
+    _tagTypes: ['new_relationship', 'engaged', 'married', 'separated', 'had_baby', 'graduated', 'lost_loved_one', 'travelled', 'custom'],
+    // Event types that show the location section
+    _locationTypes: ['started_job', 'left_job', 'moved', 'graduated', 'travelled', 'custom', 'married', 'engaged', 'had_baby', 'new_pet'],
+
+    init() {
+        // Attach radio button listeners
+        document.querySelectorAll('.life-event-radio').forEach(radio => {
+            radio.addEventListener('change', () => this.updatePreview());
+        });
+        // Attach friend search listener
+        const friendInput = document.getElementById('life_event_friend_input');
+        if (friendInput) {
+            friendInput.addEventListener('input', () => this._searchFriends(friendInput.value));
+        }
+    },
+
+    openModal() {
+        this._selectedType = null;
+        this._taggedFriends = [];
+        // Reset all radio buttons
+        document.querySelectorAll('.life-event-radio').forEach(r => r.checked = false);
+        document.querySelectorAll('.life-event-type-option').forEach(el => {
+            el.classList.remove('border-purple-400', 'bg-purple-50', 'dark:bg-purple-900');
+        });
+        // Reset hidden inputs and date
+        const typeInput = document.getElementById('life_event_type_value');
+        const dateInput = document.getElementById('life_event_date');
+        const submitBtn = document.getElementById('life_event_submit_btn');
+        const taggedInput = document.getElementById('life_event_tagged_users_input');
+        const taggedDisplay = document.getElementById('life_event_tagged_display');
+        const friendInput = document.getElementById('life_event_friend_input');
+        const locationInput = document.getElementById('life_event_location');
+        if (typeInput) typeInput.value = '';
+        if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+        if (submitBtn) submitBtn.disabled = true;
+        if (taggedInput) taggedInput.value = '[]';
+        if (taggedDisplay) taggedDisplay.innerHTML = '';
+        if (friendInput) friendInput.value = '';
+        if (locationInput) locationInput.value = '';
+        // Hide contextual sections
+        const tagSection = document.getElementById('life-event-tag-section');
+        const locationSection = document.getElementById('life-event-location-section');
+        if (tagSection) tagSection.style.display = 'none';
+        if (locationSection) locationSection.style.display = 'none';
+        App.Modal.open('lifeEventModal');
+    },
+
+    closeModal() {
+        App.Modal.close('lifeEventModal');
+    },
+
+    updatePreview() {
+        const selected = document.querySelector('.life-event-radio:checked');
+        const submitBtn = document.getElementById('life_event_submit_btn');
+        const typeInput = document.getElementById('life_event_type_value');
+        const tagSection = document.getElementById('life-event-tag-section');
+        const locationSection = document.getElementById('life-event-location-section');
+
+        // Highlight selected option
+        document.querySelectorAll('.life-event-type-option').forEach(el => {
+            el.classList.remove('border-purple-400', 'bg-purple-50', 'dark:bg-purple-900');
+        });
+
+        if (selected) {
+            this._selectedType = selected.value;
+            if (typeInput) typeInput.value = selected.value;
+            if (submitBtn) submitBtn.disabled = false;
+            const label = selected.closest('.life-event-type-option');
+            if (label) {
+                label.classList.add('border-purple-400', 'bg-purple-50', 'dark:bg-purple-900');
+            }
+            // Show/hide tag and location sections based on event type
+            if (tagSection) tagSection.style.display = this._tagTypes.includes(selected.value) ? 'block' : 'none';
+            if (locationSection) locationSection.style.display = this._locationTypes.includes(selected.value) ? 'block' : 'none';
+        } else {
+            this._selectedType = null;
+            if (typeInput) typeInput.value = '';
+            if (submitBtn) submitBtn.disabled = true;
+            if (tagSection) tagSection.style.display = 'none';
+            if (locationSection) locationSection.style.display = 'none';
+        }
+    },
+
+    async _searchFriends(query) {
+        const resultsEl = document.getElementById('life_event_friend_results');
+        if (!resultsEl) return;
+        if (!query || query.trim().length < 1) {
+            resultsEl.classList.add('hidden');
+            return;
+        }
+        try {
+            const response = await fetch('/friends/api/friends_list');
+            if (!response.ok) return;
+            const data = await response.json();
+            const filtered = (data.friends || []).filter(f =>
+                f.display_name.toLowerCase().includes(query.toLowerCase())
+            );
+            if (filtered.length === 0) {
+                resultsEl.innerHTML = '<p class="p-2 text-sm secondary-text">No friends found.</p>';
+            } else {
+                resultsEl.innerHTML = filtered.map(f => `
+                    <div class="flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer rounded"
+                         onclick="App.LifeEvent._tagFriend('${f.puid}', '${f.display_name.replace(/'/g, "\\'")}')">
+                        <span class="text-sm primary-text">${f.display_name}</span>
+                    </div>
+                `).join('');
+            }
+            resultsEl.classList.remove('hidden');
+        } catch(e) {
+            console.error('Life event friend search error:', e);
+        }
+    },
+
+    _tagFriend(puid, displayName) {
+        if (this._taggedFriends.find(f => f.puid === puid)) return; // Already tagged
+        this._taggedFriends.push({ puid, displayName });
+        this._updateTaggedDisplay();
+        // Clear search
+        const friendInput = document.getElementById('life_event_friend_input');
+        const resultsEl = document.getElementById('life_event_friend_results');
+        if (friendInput) friendInput.value = '';
+        if (resultsEl) resultsEl.classList.add('hidden');
+    },
+
+    _removeTaggedFriend(puid) {
+        this._taggedFriends = this._taggedFriends.filter(f => f.puid !== puid);
+        this._updateTaggedDisplay();
+    },
+
+    _updateTaggedDisplay() {
+        const display = document.getElementById('life_event_tagged_display');
+        const hiddenInput = document.getElementById('life_event_tagged_users_input');
+        if (display) {
+            display.innerHTML = this._taggedFriends.map(f => `
+                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
+                    ${f.displayName}
+                    <button type="button" onclick="App.LifeEvent._removeTaggedFriend('${f.puid}')" class="ml-1 hover:text-red-500">&times;</button>
+                </span>
+            `).join('');
+        }
+        if (hiddenInput) {
+            hiddenInput.value = JSON.stringify(this._taggedFriends.map(f => f.puid));
+        }
+    },
+};
+
 // Make functions globally available for onclick handlers
 window.removeTagFromPost = (postCuid) => App.Privacy.removeTag(postCuid);
 window.removeMentionFromPost = (postCuid) => App.Privacy.removeMentionFromPost(postCuid);
@@ -7379,6 +7540,11 @@ App.initCore = async function() {
                  document.getElementById('discoverGroupsSearchInput')) && 
                  this.Discover && typeof this.Discover.init === 'function') {
                 this.Discover.init();
+            }
+            // LifeEvent module - if life event modal exists
+            if (document.getElementById('lifeEventModal') && 
+                this.LifeEvent && typeof this.LifeEvent.init === 'function') {
+                this.LifeEvent.init();
             }
             
             console.log("Page-specific modules initialized.");
@@ -7764,6 +7930,10 @@ async function openCreateEventModal(sourceType, sourcePuid, sourceName) {
     // Module pre-loaded
     App.Events.openCreateModal(sourceType, sourcePuid, sourceName);
 }
+
+// --- Life Events ---
+function openLifeEventModal() { App.LifeEvent.openModal(); }
+function closeLifeEventModal() { App.LifeEvent.closeModal(); }
 
 // =================================================================================
 // MEDIA GALLERY FILTERS
