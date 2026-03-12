@@ -385,7 +385,7 @@ const FEELINGS = [
     { emoji: '😍', label: 'loved' },
     { emoji: '😂', label: 'amused' },
     { emoji: '😎', label: 'cool' },
-    { emoji: '🥹', label: 'grateful' },
+    { emoji: '🙏', label: 'grateful' },
     { emoji: '😌', label: 'content' },
     { emoji: '🤩', label: 'amazed' },
     { emoji: '😤', label: 'determined' },
@@ -394,11 +394,11 @@ const FEELINGS = [
     { emoji: '😴', label: 'tired' },
     { emoji: '🤒', label: 'unwell' },
     { emoji: '😡', label: 'frustrated' },
-    { emoji: '🥳', label: 'celebratory' },
+    { emoji: '🎉', label: 'celebratory' },
     { emoji: '😇', label: 'blessed' },
     { emoji: '🤔', label: 'thoughtful' },
     { emoji: '😬', label: 'nervous' },
-    { emoji: '🥰', label: 'adored' },
+    { emoji: '🤗', label: 'adored' },
     { emoji: '💪', label: 'motivated' },
 ];
 
