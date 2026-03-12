@@ -172,6 +172,15 @@ def get_feed_content():
     # Add to context
     current_user_requires_parental_approval = requires_parental_approval(current_user_id) if current_user_id else False
 
+    # Memories: On This Day
+    memories_by_year = {}
+    if current_user_id:
+        from db_queries.posts import get_memories_for_user
+        memories_by_year = get_memories_for_user(current_user_id)
+
+    from datetime import date as _date
+    now = _date.today()
+
     # Render the *partial* template
     return render_template('_feed_content.html',
                            username=current_username,
@@ -183,6 +192,8 @@ def get_feed_content():
                            viewer_home_url=viewer_home_url,
                            viewer_puid_for_js=viewer_puid_for_js,
                            friend_puids=friend_puids,
+                           memories_by_year=memories_by_year,
+                           now=now,
                            current_user_requires_parental_approval=current_user_requires_parental_approval)
 
 @main_bp.route('/api/feed/posts')
@@ -280,6 +291,54 @@ def check_new_feed_posts():
     )
     
     return jsonify({'has_new_posts': has_new})
+
+@main_bp.route('/api/feed/memories/<int:year>')
+def get_memories_for_year(year):
+    """
+    Returns rendered HTML for all of the current user's posts
+    on this day in the given year (for the memory modal).
+    """
+    if 'username' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+
+    current_username = session.get('username')
+    user_data = get_user_by_username(current_username)
+    if not user_data:
+        return jsonify({'error': 'User not found'}), 404
+
+    current_user_id = user_data['id']
+    current_user_puid = user_data['puid']
+    is_admin = user_data['user_type'] == 'admin'
+
+    from db_queries.posts import get_memories_for_user
+    from db_queries.friends import get_all_friends_puid
+    from db_queries.parental_controls import requires_parental_approval
+
+    memories_by_year = get_memories_for_user(current_user_id)
+    year_posts = memories_by_year.get(year, [])
+
+    friend_puids = get_all_friends_puid(current_user_id)
+    current_user_requires_parental_approval = requires_parental_approval(current_user_id)
+
+    insecure_mode = current_app.config.get('FEDERATION_INSECURE_MODE', False)
+    protocol = 'http' if insecure_mode else 'https'
+    viewer_home_url = f"{protocol}://{current_app.config.get('NODE_HOSTNAME')}"
+
+    rendered_posts = []
+    for post in year_posts:
+        html = render_template('_post_template.html',
+                               post=post,
+                               current_user_id=current_user_id,
+                               current_user_puid=current_user_puid,
+                               current_user=user_data,
+                               is_admin=is_admin,
+                               is_federated_viewer=False,
+                               viewer_home_url=viewer_home_url,
+                               friend_puids=friend_puids,
+                               current_user_requires_parental_approval=current_user_requires_parental_approval)
+        rendered_posts.append(html)
+
+    return jsonify({'posts_html': rendered_posts, 'year': year, 'count': len(rendered_posts)})
 
 @main_bp.route('/api/profile/<puid>/posts')
 def get_profile_posts_api(puid):
@@ -1096,6 +1155,7 @@ def create_post():
     tagged_user_puids_json = request.form.get('tagged_users', '[]')
     tagged_user_puids = json.loads(tagged_user_puids_json) if tagged_user_puids_json else []
     location = request.form.get('location', '').strip() or None
+    feeling = request.form.get('feeling', '').strip() or None
     
     # NEW: Get poll data if provided
     poll_data_json = request.form.get('poll_data', '')
@@ -1120,6 +1180,7 @@ def create_post():
             event_id=event_id,
             tagged_user_puids=tagged_user_puids,  # NEW
             location=location,
+            feeling=feeling,
             poll_data=poll_data
         )
         if post_cuid:
@@ -1158,6 +1219,7 @@ def create_life_event():
     life_event_date_str = request.form.get('life_event_date', '').strip()
     tagged_user_puids_json = request.form.get('tagged_users', '[]')
     location = request.form.get('location', '').strip() or None
+    feeling = request.form.get('feeling', '').strip() or None
 
     if not life_event_type:
         flash('Please select a life event type.', 'danger')
@@ -1187,6 +1249,7 @@ def create_life_event():
             privacy_setting=privacy_setting,
             tagged_user_puids=tagged_user_puids,
             location=location,
+            feeling=feeling,
             post_type='life_event',
             life_event_type=life_event_type,
             life_event_date=life_event_date

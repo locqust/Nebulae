@@ -263,8 +263,10 @@ function removeLocation() {
 function resetPostTagging() {
     selectedFriends = [];
     currentLocation = '';
+    currentFeeling = '';
     updateTaggedUsersDisplay();
     updateLocationDisplay();
+    updateFeelingDisplay();
 }
 
 // Add event listener to form submission to reset
@@ -300,6 +302,9 @@ window.openLocationModal = openLocationModal;
 window.applyLocation = applyLocation;
 window.removeLocation = removeLocation;
 window.showTaggedPeopleModal = showTaggedPeopleModal;
+window.openFeelingModal = openFeelingModal;
+window.selectFeeling = selectFeeling;
+window.removeFeeling = removeFeeling;
 
 /**
  * Shows modal with all tagged people for a post
@@ -371,4 +376,75 @@ function displayTaggedPeopleList(taggedUsers) {
             </div>
         </div>
     `).join('');
+}
+
+// Feelings list with emoji
+const FEELINGS = [
+    { emoji: '😊', label: 'happy' },
+    { emoji: '😄', label: 'excited' },
+    { emoji: '😍', label: 'loved' },
+    { emoji: '😂', label: 'amused' },
+    { emoji: '😎', label: 'cool' },
+    { emoji: '🥹', label: 'grateful' },
+    { emoji: '😌', label: 'content' },
+    { emoji: '🤩', label: 'amazed' },
+    { emoji: '😤', label: 'determined' },
+    { emoji: '😔', label: 'sad' },
+    { emoji: '😰', label: 'anxious' },
+    { emoji: '😴', label: 'tired' },
+    { emoji: '🤒', label: 'unwell' },
+    { emoji: '😡', label: 'frustrated' },
+    { emoji: '🥳', label: 'celebratory' },
+    { emoji: '😇', label: 'blessed' },
+    { emoji: '🤔', label: 'thoughtful' },
+    { emoji: '😬', label: 'nervous' },
+    { emoji: '🥰', label: 'adored' },
+    { emoji: '💪', label: 'motivated' },
+];
+
+let currentFeeling = '';
+
+function openFeelingModal() {
+    const modal = document.getElementById('feeling-modal');
+    if (!modal) return;
+    renderFeelingsList();
+    openModal('feeling-modal');
+}
+
+function renderFeelingsList() {
+    const list = document.getElementById('feeling-list');
+    if (!list) return;
+    list.innerHTML = FEELINGS.map(f => `
+        <button type="button"
+                onclick="selectFeeling('${f.emoji} ${f.label}')"
+                class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left w-full ${currentFeeling === f.emoji + ' ' + f.label ? 'bg-pink-100 dark:bg-pink-900 font-semibold' : ''}">
+            <span class="text-xl">${f.emoji}</span>
+            <span class="primary-text text-sm">${f.label}</span>
+        </button>
+    `).join('');
+}
+
+function selectFeeling(feeling) {
+    currentFeeling = feeling;
+    updateFeelingDisplay();
+    closeModal('feeling-modal');
+}
+
+function updateFeelingDisplay() {
+    const section = document.getElementById('feeling-section');
+    const display = document.getElementById('feeling-display');
+    const hiddenInput = document.getElementById('feeling-input');
+    if (!currentFeeling) {
+        if (section) section.style.display = 'none';
+        if (hiddenInput) hiddenInput.value = '';
+        return;
+    }
+    if (display) display.textContent = 'feeling ' + currentFeeling;
+    if (section) section.style.display = 'block';
+    if (hiddenInput) hiddenInput.value = currentFeeling;
+}
+
+function removeFeeling() {
+    currentFeeling = '';
+    updateFeelingDisplay();
 }

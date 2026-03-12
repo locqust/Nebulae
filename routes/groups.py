@@ -505,6 +505,7 @@ def create_group_post(puid):
     tagged_user_puids_json = request.form.get('tagged_users', '[]')
     tagged_user_puids = json.loads(tagged_user_puids_json) if tagged_user_puids_json else []
     location = request.form.get('location', '').strip() or None
+    feeling = request.form.get('feeling', '').strip() or None
 
     if not content and not media_files_for_db:
         flash('Post content or media cannot be empty.', 'danger')
@@ -535,6 +536,7 @@ def create_group_post(puid):
             author_hostname=current_user.get('hostname'),
             tagged_user_puids=tagged_user_puids,  # NEW
             location=location,
+            feeling=feeling,
             poll_data=poll_data
         )
 

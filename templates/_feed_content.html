@@ -17,6 +17,74 @@
         {% endwith %}
     {% endif %}
 
+    {% if memories_by_year %}
+    <!-- On This Day Memories Widget -->
+    <div class="p-4 rounded-lg shadow-sm border post-card mb-6" id="memories-widget">
+        <h3 class="text-lg font-bold primary-text mb-3 flex items-center gap-2">
+            <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            On This Day
+        </h3>
+        <div class="flex gap-3 overflow-x-auto pb-2 memories-scroll" style="scrollbar-width: thin;">
+            {% for year, year_posts in memories_by_year.items() | sort(reverse=True) %}
+                {% set years_ago = now.year - year %}
+                {% set first_post = year_posts[0] %}
+                {% set first_media = first_post.media_files[0] if first_post.media_files else (first_post.original_post.media_files[0] if first_post.is_repost and first_post.original_post and first_post.original_post.media_files else none) %}
+                <button class="memory-card flex-shrink-0 relative rounded-lg overflow-hidden cursor-pointer border border-gray-300 dark:border-gray-600 hover:ring-2 hover:ring-blue-500 transition-all"
+                        style="width: 140px; height: 100px;"
+                        onclick="App.Memories.openModal({{ year }})"
+                        title="{{ years_ago }} year{{ 's' if years_ago != 1 else '' }} ago">
+
+                    {% set post_content = (first_post.content or (first_post.original_post.content if first_post.is_repost and first_post.original_post else '') or '') %}
+                    {% set author_puid = first_post.author.puid %}
+                    {% set insecure_mode = config.get('FEDERATION_INSECURE_MODE', False) %}
+                    {% set protocol = 'http' if insecure_mode else 'https' %}
+
+                    {% if first_media %}
+                        {% if first_media.origin_hostname and first_media.origin_hostname != config.get('NODE_HOSTNAME') %}
+                            {% set thumb_url = protocol ~ '://' ~ first_media.origin_hostname ~ '/thumbnails/' ~ author_puid ~ '/' ~ first_media.media_file_path %}
+                        {% else %}
+                            {% set thumb_url = url_for('main.serve_thumbnail', puid=author_puid, filename=first_media.media_file_path) %}
+                        {% endif %}
+                        {% if first_media.media_file_path.lower().endswith(('.mp4', '.mov', '.webm', '.avi', '.mkv')) %}
+                            <!-- Video: show text fallback since thumbnailing video in a tiny card is painful -->
+                            <div class="w-full h-full flex items-center justify-center p-2 bg-gradient-to-br from-blue-600 to-purple-700">
+                                <p class="text-white text-xs text-center leading-tight" style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">
+                                    🎥 {{ post_content | truncate(50, True, '…') if post_content else 'Video post' }}
+                                </p>
+                            </div>
+                        {% else %}
+                            <img src="{{ thumb_url }}"
+                                 class="w-full h-full object-cover" alt="Memory"
+                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                            <!-- Fallback shown if image fails to load -->
+                            <div class="w-full h-full items-center justify-center p-2 bg-gradient-to-br from-blue-600 to-purple-700" style="display:none;">
+                                <p class="text-white text-xs text-center leading-tight" style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">
+                                    {{ post_content | truncate(60, True, '…') if post_content else 'A memory from ' ~ year }}
+                                </p>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <!-- No media: text snippet -->
+                        <div class="w-full h-full flex items-center justify-center p-2 bg-gradient-to-br from-blue-600 to-purple-700">
+                            <p class="text-white text-xs text-center leading-tight" style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">
+                                {{ post_content | truncate(60, True, '…') if post_content else 'A memory from ' ~ year }}
+                            </p>
+                        </div>
+                    {% endif %}
+
+                    <!-- Year overlay -->
+                    <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1 text-center">
+                        <p class="text-white text-xs font-bold leading-tight">{{ years_ago }} year{{ 's' if years_ago != 1 else '' }} ago</p>
+                        <p class="text-gray-300 text-xs leading-tight">{{ year }}</p>
+                    </div>
+                </button>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <h2 class="text-2xl font-bold mb-4 primary-text">Feed</h2>
     {% if posts %}
         <div class="space-y-6" id="feed-posts-container" data-limit="20">

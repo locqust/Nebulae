@@ -118,51 +118,63 @@
                             {{ original_post.author.display_name }}
                         </a>
                     {% endif %}
-                    
-                    {# NEW: Display tagged users #}
+
+                    {# NEW: Display feeling and/or tagged users — shared 'is' logic #}
+                    {% set tagged_puids = [] %}
                     {% if original_post.tagged_user_puids %}
                         {% set tagged_puids = original_post.tagged_user_puids|from_json if original_post.tagged_user_puids is string else original_post.tagged_user_puids %}
-                        {% if tagged_puids and tagged_puids|length > 0 %}
-                            <span class="secondary-text">is with</span>
-                            {% if tagged_puids|length == 1 %}
-                                {# Single tagged user #}
-                                {% set tagged_user = get_user_by_puid(tagged_puids[0]) %}
-                                {% if tagged_user %}
-                                    <a href="{{ federated_user_profile_url(tagged_user) }}" class="name-link">
-                                        {{ tagged_user.display_name }}
-                                    </a>
-                                {% endif %}
-                            {% elif tagged_puids|length == 2 %}
-                                {# Two tagged users: "Name1 and Name2" #}
-                                {% set tagged_user_1 = get_user_by_puid(tagged_puids[0]) %}
-                                {% set tagged_user_2 = get_user_by_puid(tagged_puids[1]) %}
-                                {% if tagged_user_1 %}
-                                    <a href="{{ federated_user_profile_url(tagged_user_1) }}" class="name-link">
-                                        {{ tagged_user_1.display_name }}
-                                    </a>
-                                {% endif %}
-                                <span class="secondary-text">and</span>
-                                {% if tagged_user_2 %}
-                                    <a href="{{ federated_user_profile_url(tagged_user_2) }}" class="name-link">
-                                        {{ tagged_user_2.display_name }}
-                                    </a>
-                                {% endif %}
-                            {% else %}
-                                {# Three or more: "Name1 and X others" #}
-                                {% set tagged_user = get_user_by_puid(tagged_puids[0]) %}
-                                {% if tagged_user %}
-                                    <a href="{{ federated_user_profile_url(tagged_user) }}" class="name-link">
-                                        {{ tagged_user.display_name }}
-                                    </a>
-                                {% endif %}
-                                <span class="secondary-text">and</span>
-                                <a href="#" onclick="showTaggedPeopleModal('{{ original_post.cuid }}', event); return false;" class="text-blue-600 dark:text-blue-400 hover:underline font-medium">
-                                    {{ tagged_puids|length - 1 }} other{{ 's' if (tagged_puids|length - 1) > 1 else '' }}
-                                </a>
-                            {% endif %}
+                    {% endif %}
+
+                    {% if original_post.feeling and tagged_puids|length > 0 %}
+                        {# Both: "is feeling X with Y" — single 'is' #}
+                        <span class="secondary-text">is feeling</span>
+                        <span class="font-medium primary-text">{{ original_post.feeling }}</span>
+                        <span class="secondary-text">with</span>
+                    {% elif original_post.feeling %}
+                        {# Feeling only: "is feeling X" #}
+                        <span class="secondary-text">is feeling</span>
+                        <span class="font-medium primary-text">{{ original_post.feeling }}</span>
+                    {% elif tagged_puids|length > 0 %}
+                        {# Tagged only: "is with Y" #}
+                        <span class="secondary-text">is with</span>
+                    {% endif %}
+
+                    {# Render tagged user names (no prefix — already handled above) #}
+                    {% if tagged_puids|length == 1 %}
+                        {% set tagged_user = get_user_by_puid(tagged_puids[0]) %}
+                        {% if tagged_user %}
+                            <a href="{{ federated_user_profile_url(tagged_user) }}" class="name-link">
+                                {{ tagged_user.display_name }}
+                            </a>
                         {% endif %}
+                    {% elif tagged_puids|length == 2 %}
+                        {% set tagged_user_1 = get_user_by_puid(tagged_puids[0]) %}
+                        {% set tagged_user_2 = get_user_by_puid(tagged_puids[1]) %}
+                        {% if tagged_user_1 %}
+                            <a href="{{ federated_user_profile_url(tagged_user_1) }}" class="name-link">
+                                {{ tagged_user_1.display_name }}
+                            </a>
+                        {% endif %}
+                        <span class="secondary-text">and</span>
+                        {% if tagged_user_2 %}
+                            <a href="{{ federated_user_profile_url(tagged_user_2) }}" class="name-link">
+                                {{ tagged_user_2.display_name }}
+                            </a>
+                        {% endif %}
+                    {% elif tagged_puids|length > 2 %}
+                        {% set tagged_user = get_user_by_puid(tagged_puids[0]) %}
+                        {% if tagged_user %}
+                            <a href="{{ federated_user_profile_url(tagged_user) }}" class="name-link">
+                                {{ tagged_user.display_name }}
+                            </a>
+                        {% endif %}
+                        <span class="secondary-text">and</span>
+                        <a href="#" onclick="showTaggedPeopleModal('{{ original_post.cuid }}', event); return false;" class="text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                            {{ tagged_puids|length - 1 }} other{{ 's' if (tagged_puids|length - 1) > 1 else '' }}
+                        </a>
                     {% endif %}
                     
+
                     {# NEW: Display location #}
                     {% if original_post.location %}
                         <span class="secondary-text">at</span>

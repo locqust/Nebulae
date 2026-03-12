@@ -20,7 +20,7 @@ import sqlite3
 
 # MODIFICATION: Added 'comments_disabled=False' to the function definition
 # NEW: Added 'tagged_user_puids=None' and 'location=None' parameters
-def add_post(user_id, profile_user_id, content, privacy_setting='local', media_files=None, nu_id=None, cuid=None, author_puid=None, profile_puid=None, group_puid=None, is_remote=False, author_hostname=None, is_repost=False, original_post_cuid=None, event_id=None, comments_disabled=False, tagged_user_puids=None, location=None, poll_data=None, timestamp=None, post_type='normal', life_event_type=None, life_event_date=None):
+def add_post(user_id, profile_user_id, content, privacy_setting='local', media_files=None, nu_id=None, cuid=None, author_puid=None, profile_puid=None, group_puid=None, is_remote=False, author_hostname=None, is_repost=False, original_post_cuid=None, event_id=None, comments_disabled=False, tagged_user_puids=None, location=None, feeling=None, poll_data=None, timestamp=None, post_type='normal', life_event_type=None, life_event_date=None):
     """Adds a new post or repost, links media, and creates notifications."""
     # CIRCULAR IMPORT FIX: Import federation functions here
     from .federation import send_remote_mention_notification, send_remote_notification
@@ -74,14 +74,14 @@ def add_post(user_id, profile_user_id, content, privacy_setting='local', media_f
     # Use provided timestamp or let database default to CURRENT_TIMESTAMP
     if timestamp:
         cursor.execute("""
-            INSERT INTO posts (cuid, user_id, profile_user_id, author_puid, profile_puid, group_id, content, privacy_setting, nu_id, is_remote, is_repost, original_post_cuid, event_id, comments_disabled, tagged_user_puids, location, timestamp, post_type, life_event_type, life_event_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (cuid, user_id, profile_user_id, author_puid, profile_puid, group_id, content, privacy_setting, nu_id, is_remote, is_repost, original_post_cuid, event_id, comments_disabled, tagged_puids_json, location, timestamp, post_type, life_event_type, life_event_date))
+            INSERT INTO posts (cuid, user_id, profile_user_id, author_puid, profile_puid, group_id, content, privacy_setting, nu_id, is_remote, is_repost, original_post_cuid, event_id, comments_disabled, tagged_user_puids, location, feeling, timestamp, post_type, life_event_type, life_event_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (cuid, user_id, profile_user_id, author_puid, profile_puid, group_id, content, privacy_setting, nu_id, is_remote, is_repost, original_post_cuid, event_id, comments_disabled, tagged_puids_json, location, feeling, timestamp, post_type, life_event_type, life_event_date))
     else:
         cursor.execute("""
-            INSERT INTO posts (cuid, user_id, profile_user_id, author_puid, profile_puid, group_id, content, privacy_setting, nu_id, is_remote, is_repost, original_post_cuid, event_id, comments_disabled, tagged_user_puids, location, post_type, life_event_type, life_event_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (cuid, user_id, profile_user_id, author_puid, profile_puid, group_id, content, privacy_setting, nu_id, is_remote, is_repost, original_post_cuid, event_id, comments_disabled, tagged_puids_json, location, post_type, life_event_type, life_event_date))
+            INSERT INTO posts (cuid, user_id, profile_user_id, author_puid, profile_puid, group_id, content, privacy_setting, nu_id, is_remote, is_repost, original_post_cuid, event_id, comments_disabled, tagged_user_puids, location, feeling, post_type, life_event_type, life_event_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (cuid, user_id, profile_user_id, author_puid, profile_puid, group_id, content, privacy_setting, nu_id, is_remote, is_repost, original_post_cuid, event_id, comments_disabled, tagged_puids_json, location, feeling, post_type, life_event_type, life_event_date))
     post_id = cursor.lastrowid
 
     if media_files and not is_repost:
@@ -893,6 +893,57 @@ def get_posts_for_group(group_puid, viewer_user_id, is_member, viewer_is_admin, 
             final_posts.append(post)
 
     return final_posts
+
+def get_memories_for_user(current_user_id):
+    """
+    Returns 'On This Day' memory posts for the current user.
+    Fetches the user's own posts (as author) from this day in previous years.
+    Returns a dict keyed by year, each containing a list of post dicts.
+    Only returns years that have at least one post.
+    """
+    from datetime import datetime, date
+    db = get_db()
+    cursor = db.cursor()
+
+    today = date.today()
+    month_day = f"{today.month:02d}-{today.day:02d}"  # e.g. "03-11"
+
+    current_user = get_user_by_id(current_user_id)
+    if not current_user:
+        return {}
+
+    author_puid = current_user['puid']
+
+    # Find posts authored by this user on this month/day in previous years
+    # strftime('%m-%d', timestamp) matches month and day regardless of year
+    cursor.execute("""
+        SELECT cuid, strftime('%Y', timestamp) as year
+        FROM posts
+        WHERE author_puid = ?
+          AND strftime('%m-%d', timestamp) = ?
+          AND strftime('%Y', timestamp) < ?
+          AND is_repost = 0
+          AND group_id IS NULL
+          AND event_id IS NULL
+          AND (profile_puid = ? OR profile_puid IS NULL)
+        ORDER BY timestamp DESC
+    """, (author_puid, month_day, str(today.year), author_puid))
+
+    rows = cursor.fetchall()
+    if not rows:
+        return {}
+
+    memories_by_year = {}
+    for row in rows:
+        year = int(row['year'])
+        cuid = row['cuid']
+        post = get_post_by_cuid(cuid)
+        if post:
+            if year not in memories_by_year:
+                memories_by_year[year] = []
+            memories_by_year[year].append(post)
+
+    return memories_by_year
 
 def get_posts_for_profile_timeline(profile_user_puid, viewer_user_id, viewer_is_admin, page=1, limit=20):
     """Retrieves posts for a specific user's profile timeline using PUID."""

@@ -43,6 +43,11 @@ function openMediaViewModal(muid) {
     
     // Show modal with loading spinner
     modal.classList.remove('hidden');
+    // If memories modal is open, step it down so standard modals (tag friends, etc.) stay on top
+    const memoriesModal = document.getElementById('memoriesModal');
+    if (memoriesModal && memoriesModal.style.display === 'flex') {
+        memoriesModal.style.zIndex = '40';
+    }
     content.innerHTML = `
         <div class="flex items-center justify-center min-h-screen">
             <div class="loader-spinner"></div>
@@ -104,6 +109,11 @@ function closeMediaViewModal() {
     if (modal) {
         modal.classList.add('hidden');
         document.body.style.overflow = '';
+    }
+    // Restore memories modal z-index if it's still open
+    const memoriesModal = document.getElementById('memoriesModal');
+    if (memoriesModal && memoriesModal.style.display === 'flex') {
+        memoriesModal.style.zIndex = '900';
     }
 }
 

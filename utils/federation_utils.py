@@ -410,6 +410,7 @@ def _get_post_payload(post):
         import json
         post_payload['tagged_user_puids'] = json.loads(post.get('tagged_user_puids', '[]')) if post.get('tagged_user_puids') else []
         post_payload['location'] = post.get('location')
+        post_payload['feeling'] = post.get('feeling')
         post_payload['post_type'] = post.get('post_type', 'normal')
         post_payload['life_event_type'] = post.get('life_event_type')
         post_payload['life_event_date'] = post.get('life_event_date')

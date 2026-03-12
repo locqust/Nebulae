@@ -558,12 +558,12 @@ def approve_request_route(approval_id):
         elif approval['approval_type'] == 'dm_start_out':
             # Child wants to start a DM with a remote user — now approved, actually create it
             from db_queries.conversations import get_or_create_conversation_between_users, create_message_request, conversation_requires_request
-            from db_queries.users import get_user_by_puid
+            from db_queries.users import get_user_by_puid as _get_user_by_puid
             import json as _json
 
             request_data_parsed = _json.loads(approval['request_data'])
             target_puid = approval['target_puid']
-            target_user = get_user_by_puid(target_puid)
+            target_user = _get_user_by_puid(target_puid)
             if not target_user:
                 return jsonify({'error': 'Target user no longer found'}), 404
 
@@ -582,14 +582,14 @@ def approve_request_route(approval_id):
         elif approval['approval_type'] == 'dm_start_in':
             # Someone tried to message child — now approved, allow the message request through
             from db_queries.conversations import get_conversation_by_conv_uid, create_message_request
-            from db_queries.users import get_user_by_puid
+            from db_queries.users import get_user_by_puid as _get_user_by_puid
             import json as _json
 
             request_data_parsed = _json.loads(approval['request_data'])
             conv_uid = request_data_parsed.get('conv_uid')
             sender_puid = approval['target_puid']
 
-            sender = get_user_by_puid(sender_puid)
+            sender = _get_user_by_puid(sender_puid)
             if not sender:
                 return jsonify({'error': 'Sender no longer found'}), 404
 

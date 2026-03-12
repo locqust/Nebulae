@@ -1087,6 +1087,7 @@ def create_event_post_route(event_puid):
     tagged_user_puids_json = request.form.get('tagged_users', '[]')
     tagged_user_puids = json.loads(tagged_user_puids_json) if tagged_user_puids_json else []
     location = request.form.get('location', '').strip() or None
+    feeling = request.form.get('feeling', '').strip() or None
 
     # PARENTAL CONTROL CHECK: Prevent children from making public posts in events
     # (Event posts are 'event' privacy by default, but check for safety)
@@ -1120,6 +1121,7 @@ def create_event_post_route(event_puid):
             author_hostname=current_user.get('hostname'),
             tagged_user_puids=tagged_user_puids,  # NEW
             location=location,
+            feeling=feeling,
             poll_data=poll_data  # NEW
         )
         if post_cuid:

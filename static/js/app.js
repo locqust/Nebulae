@@ -1443,6 +1443,68 @@ App.LoadMore = {
 };
 
 /**
+ * @file modules/memories.js (inline)
+ * @description "On This Day" memories modal.
+ */
+App.Memories = {
+    _modalId: 'memoriesModal',
+
+    /**
+     * Open the memories modal for a given year.
+     * Fetches rendered posts from the API and injects them.
+     */
+    async openModal(year) {
+        // Ensure the modal exists in the DOM
+        if (!document.getElementById(this._modalId)) {
+            this._injectModalHTML();
+        }
+
+        const modal = document.getElementById(this._modalId);
+        const titleEl = document.getElementById('memoriesModalTitle');
+        const bodyEl = document.getElementById('memoriesModalBody');
+
+        titleEl.textContent = `On This Day — ${year}`;
+        bodyEl.innerHTML = '<div class="flex justify-center py-8"><div class="loader-spinner"></div></div>';
+        App.Modal.open(this._modalId);
+
+        try {
+            const response = await fetch(`/api/feed/memories/${year}`);
+            if (!response.ok) throw new Error('Failed to load memories.');
+            const data = await response.json();
+
+            if (!data.posts_html || data.posts_html.length === 0) {
+                bodyEl.innerHTML = '<p class="text-center secondary-text py-8">No posts found for this day.</p>';
+                return;
+            }
+
+            bodyEl.innerHTML = '<div class="space-y-6">' + data.posts_html.join('') + '</div>';
+
+            // Re-run timestamp conversion and any post-level init on the new content
+            if (App.Utils && App.Utils.convertAllUTCTimestamps) {
+                App.Utils.convertAllUTCTimestamps();
+            }
+        } catch (err) {
+            console.error('Memories modal error:', err);
+            bodyEl.innerHTML = '<p class="text-center secondary-text py-8">Could not load memories. Try again later.</p>';
+        }
+    },
+
+    _injectModalHTML() {
+        const html = `
+            <div id="memoriesModal" class="modal hidden" style="z-index: 900;">
+                <div class="modal-content" style="max-width: 680px; max-height: 85vh; display: flex; flex-direction: column;">
+                    <span class="close-button" onclick="App.Modal.close('memoriesModal')">&times;</span>
+                    <h2 id="memoriesModalTitle" class="text-xl font-bold mb-4 primary-text pr-8">On This Day</h2>
+                    <div id="memoriesModalBody" class="overflow-y-auto custom-scrollbar flex-1 pr-1">
+                        <!-- Posts injected here -->
+                    </div>
+                </div>
+            </div>`;
+        document.body.insertAdjacentHTML('beforeend', html);
+    }
+};
+
+/**
  * @file modules/new_posts_polling.js
  * @description Polls for new posts on timelines and shows indicator
  * Populates the App.NewPostsPolling namespace.
@@ -1968,6 +2030,13 @@ App.Router = {
             document.getElementById('lifeEventModal').dataset.listenerAttached = 'true';
         }
 
+        // Memories module — inject modal shell on feed load if widget is present
+        if (document.getElementById('memories-widget') &&
+            App.Memories &&
+            !document.getElementById('memoriesModal')) {
+            App.Memories._injectModalHTML();
+        }
+        
         // Preload and initialize page-specific modules
         // All modules already loaded in consolidated app.js
         

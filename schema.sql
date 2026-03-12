@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS posts (
     comments_disabled BOOLEAN DEFAULT FALSE NOT NULL, -- NEW: Ability to turn off comments
     tagged_user_puids TEXT, -- NEW: JSON array of PUIDs for users tagged in the post
     location TEXT, -- NEW: Location string for check-ins
+    feeling TEXT, -- NEW: Feeling/emotion string e.g. 'excited', 'happy', 'grateful'
     post_type TEXT NOT NULL DEFAULT 'normal', -- NEW: 'normal' or 'life_event'
     life_event_type TEXT, -- NEW: e.g. 'new_job', 'married', 'moved', etc.
     life_event_date DATE, -- NEW: The actual date of the life event (for backdating)
