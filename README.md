@@ -155,8 +155,8 @@ Visit http://localhost:5000 to see your development instance.
 
 ### **Planned Features**
 
- - [] Multi-language support
- - [] Export/Import tools to move your profile/public page/group to a new node (Aspirational, this might not be an easy thing to do)
+ - [ ] Multi-language support
+ - [ ] Export/Import tools to move your profile/public page/group to a new node (Aspirational, this might not be an easy thing to do)
  - [x] Direct Messages
  - [x] Memories
  - [x] Feelings
