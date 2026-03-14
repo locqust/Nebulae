@@ -7,8 +7,8 @@
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://hub.docker.com)
 [![Python](https://img.shields.io/badge/Python-3.9+-3776AB?logo=python&logoColor=white)](https://www.python.org)
 
-Remember when social media was about connecting with friends, not algorithms and ads? In the late 00's, early 10's? Yeah me too. It annoys me when I scroll through my Facebook feed and its all 'sponsored' posts, 'follow suggestions', outright adverts. I can scroll for a good minute or two before I see a post from someone (or a group) I actually know. And then I find the post was 6 days ago! Let's face it mainstream social media now is all about keeping you locked to that screen cnstantly feeding you suggestions, or tweaking what it shows you because you briefly paused from scrolling near a random advert you don't care about and now it thinks thats what you want to see more of! 
-Nebulae attempts brings back that social media experience of before with modern privacy standards and using a decentralized federation method. Why decentralised? So YOU conrol your data. 
+Remember when social media was about connecting with friends, not algorithms and ads? In the late 00's, early 10's? Yeah me too. It annoys me when I scroll through my Facebook feed and its all 'sponsored' posts, 'follow suggestions', outright adverts. I can scroll for a good minute or two before I see a post from someone (or a group) I actually know. And then I find the post was 6 days ago! Let's face it, mainstream social media now is all about keeping you locked to that screen cnstantly feeding you suggestions, or tweaking what it shows you because you briefly paused from scrolling near a random advert you don't care about and now it thinks thats what you want to see more of! 
+Nebulae attempts brings back that social media experience of before with modern privacy standards and using a decentralized federation method. Why decentralised? So YOU control your data. 
 
 
 ## **What is Nebulae?**
