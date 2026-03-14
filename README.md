@@ -1,7 +1,7 @@
 <img width="192" height="192" alt="logo_900x900" src="https://github.com/user-attachments/assets/f034237e-351a-4e66-aacb-6eb44cc2f157" />
 
 
-# **A privacy-focused, self-hosted federated social media platform.**
+# **A privacy-focused, self-hosted, federated social media platform.**
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://hub.docker.com)
