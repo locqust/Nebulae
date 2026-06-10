@@ -1,86 +1,69 @@
-# Nebulae Documentation
+# Installation
 
-Welcome to the official documentation for **Nebulae** — a privacy-focused, federated social media platform.
+Nebulae can be installed in several ways depending on your environment and preferences. All methods result in the same application — pick whichever fits your setup best.
 
-## 🌟 What is Nebulae?
-
-Nebulae is a self-hosted social networking platform that brings back the authentic experience of connecting with friends and family, without algorithms, ads, or surveillance. Built on principles of privacy, user control, and decentralized federation, Nebulae lets you own your data and your social connections.
-
----
-
-## 📚 Documentation Sections
-
-### [Overview](overview/introduction.md)
-Learn about Nebulae's philosophy, core features, and how federation works.
-- [Introduction](overview/introduction.md)
-- [Key Features](overview/features.md)
-- [Architecture](overview/architecture.md)
-- [Quick Start](overview/quick-start.md)
-
-### [Admin Guide](admin-guide/installation.md)
-Complete guide for administrators setting up and managing Nebulae instances.
-- [Installation](admin-guide/installation.md)
-- [Configuration](admin-guide/configuration.md)
-- [User Management](admin-guide/user-management.md)
-- [Group Management](admin-guide/group-management.md)
-- [Federation Setup](admin-guide/federation-setup.md)
-- [Backups & Updates](admin-guide/backups-updates.md)
-
-### [User Guide](user-guide/getting-started.md)
-Everything users need to know to make the most of Nebulae.
-- [Getting Started](user-guide/getting-started.md)
-- [Creating Posts](user-guide/creating-posts.md)
-- [Friends & Discovery](user-guide/friends-discovery.md)
-- [Groups](user-guide/groups.md)
-- [Events](user-guide/events.md)
-- [Privacy Settings](user-guide/privacy-settings.md)
-- [Notifications](user-guide/notifications.md)
-
-### [Features](features/posts.md)
-In-depth documentation of specific features.
-- [Posts & Media](features/posts.md)
-- [Groups](features/groups.md)
-- [Events](features/events.md)
-- [Public Pages](features/public-pages.md)
-- [Polls](features/polls.md)
-- [Media Albums](features/media-albums.md)
-- [Parental Controls](features/parental-controls.md)
-
-### [Federation](federation/overview.md)
-Understanding how Nebulae nodes connect and share content.
-- [Federation Overview](federation/overview.md)
-- [Connecting Nodes](federation/connecting-nodes.md)
-- [Privacy & Security](federation/privacy-security.md)
-
-### [Troubleshooting](troubleshooting/common-issues.md)
-Solutions to common problems and debugging guides.
-- [Common Issues](troubleshooting/common-issues.md)
-- [Docker Issues](troubleshooting/docker-issues.md)
-- [Federation Issues](troubleshooting/federation-issues.md)
+!!! tip "Not sure which to choose?"
+    - **Linux server or desktop** → [Linux (Native)](linux.md)
+    - **Raspberry Pi** → [Raspberry Pi](raspberry-pi.md)
+    - **Docker, Portainer, Podman, or Kubernetes** → [Docker / Podman](container.md)
+    - **Windows or macOS** → Use [Docker / Podman](container.md) for now
 
 ---
 
-## 🚀 Quick Links
+## Choose Your Installation Method
 
-- **[Installation Guide](admin-guide/installation.md)** - Get Nebulae up and running
-- **[Quick Start](overview/quick-start.md)** - Deploy in 5 minutes
-- **[Federation Setup](admin-guide/federation-setup.md)** - Connect with other nodes
-- **[User Guide](user-guide/getting-started.md)** - Start using Nebulae
+<div class="grid cards" markdown>
+
+-   :fontawesome-brands-linux: **Linux (Native)**
+
+    ---
+
+    Run Nebulae directly on any Linux server or desktop without Docker. Uses Gunicorn + systemd for production-quality reliability.
+
+    Best for: Ubuntu/Debian servers, pizza-box home servers, anyone who'd rather not run Docker.
+
+    [:octicons-arrow-right-24: Linux install guide](linux.md)
+
+-   :material-raspberry-pi: **Raspberry Pi**
+
+    ---
+
+    Native install optimised for Pi 4 and Pi 5. Same approach as Linux but with Pi-specific notes on dependencies and performance tuning.
+
+    Best for: Low-power always-on home servers.
+
+    [:octicons-arrow-right-24: Raspberry Pi install guide](raspberry-pi.md)
+
+-   :fontawesome-brands-docker: **Docker / Podman**
+
+    ---
+
+    The container-based install. Pre-built images for `amd64` and `arm64` are available from GHCR. Supports Docker Compose, Portainer, Podman, and Kubernetes.
+
+    Best for: Anyone already running Docker, NAS devices, cloud VMs.
+
+    [:octicons-arrow-right-24: Container install guide](container.md)
+
+</div>
 
 ---
 
-## 💡 Getting Help
+## Prerequisites Common to All Methods
 
-- **GitHub Issues**: [Report bugs or request features](https://github.com/locqust/Nebulae/issues)
-- **Discord**: Coming soon!
-- **Email Support**: Coming soon!
+Regardless of how you install Nebulae, you will need:
 
----
-
-## 📝 Contributing to Documentation
-
-Found a typo or want to improve the docs? We welcome contributions! Visit our [GitHub repository](https://github.com/locqust/Nebulae) to submit improvements.
+- A **domain name or static IP address** that other nodes (and your users) can reach. For home users, a free dynamic DNS service such as [DuckDNS](https://www.duckdns.org/) works well.
+- **HTTPS** for federation. Nebulae nodes sign and verify requests; HTTP-only deployments cannot federate with other nodes. [Nginx Proxy Manager](https://nginxproxymanager.com/) is the easiest way to get a Let's Encrypt certificate if you don't have one already.
+- Enough storage for your media. SQLite and the application code are tiny; your photos and videos are not.
 
 ---
 
-**Built with privacy and user control in mind. Welcome to a better social media experience.** 🌌
+## After Installation
+
+Once Nebulae is running, head to the [Post-Install Setup](../admin-guide/post-install.md) guide to:
+
+- Change the default admin password
+- Create user accounts
+- Configure media paths
+- Set up email and push notifications
+- Connect to other Nebulae nodes
