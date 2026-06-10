@@ -35,7 +35,7 @@ from routes.push_notifications import push_notifications_bp
 from routes.parental import parental_bp
 
 # Application version
-__version__ = "0.9.3.5-beta"
+__version__ = "0.9.4.0-beta"
 
 app = Flask(__name__)
 Compress(app)
@@ -52,16 +52,20 @@ app.secret_key = SECRET_KEY
 DATABASE = os.path.join(app.instance_path, 'social_node.db')
 
 # Define the base directory inside the container where user media volumes are mounted (READ-ONLY)
-USER_MEDIA_BASE_DIR = '/app/user_media'
+#USER_MEDIA_BASE_DIR = '/app/user_media'
+USER_MEDIA_BASE_DIR = os.environ.get('USER_MEDIA_BASE_DIR', '/app/user_media')
 
 # Define the base directory for user uploads (WRITABLE)
-USER_UPLOADS_BASE_DIR = '/app/user_uploads'
+#USER_UPLOADS_BASE_DIR = '/app/user_uploads'
+USER_UPLOADS_BASE_DIR = os.environ.get('USER_UPLOADS_BASE_DIR', '/app/user_uploads')
 
 # Define the base directory for profile pictures (WRITABLE)
-PROFILE_PICTURE_STORAGE_DIR = '/app/profile_pictures_storage'
+#PROFILE_PICTURE_STORAGE_DIR = '/app/profile_pictures_storage'
+PROFILE_PICTURE_STORAGE_DIR = os.environ.get('PROFILE_PICTURE_STORAGE_DIR', '/app/profile_pictures_storage')
 
 # Define the base directory for thumbnails (WRITABLE)
-THUMBNAIL_CACHE_DIR = '/app/thumbnails'
+#THUMBNAIL_CACHE_DIR = '/app/thumbnails'
+THUMBNAIL_CACHE_DIR = os.environ.get('THUMBNAIL_CACHE_DIR', '/app/thumbnails')
 
 # Allowed extensions for profile pictures
 ALLOWED_PROFILE_PICTURE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
