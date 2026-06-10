@@ -53,3 +53,5 @@ node_modules
 # OS files
 .DS_Store
 Thumbs.db
+#Native install scripts
+scripts/

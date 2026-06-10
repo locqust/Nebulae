@@ -58,8 +58,13 @@ nav:
       - Key Features: overview/features.md
       - Architecture: overview/architecture.md
       - Quick Start: overview/quick-start.md
+  - Installation:
+      - Overview: installation/index.md
+      - Linux (Native): installation/linux.md
+      - Raspberry Pi: installation/raspberry-pi.md
+      - Docker / Podman: installation/container.md
   - Admin Guide:
-      - Installation: admin-guide/installation.md
+      - Post-Install Setup: admin-guide/post-install.md
       - User Management: admin-guide/user-management.md
       - Federation Setup: admin-guide/federation-setup.md
   - User Guide:
@@ -131,7 +136,3 @@ extra:
       link: https://github.com/locqust/Nebulae
       name: Nebulae on GitHub
   generator: false
-  
-  # Announcement bar (optional)
-  # announcement:
-  #   content: "🎉 Nebulae v0.9.1.5-beta is now available! Check out the release notes."
