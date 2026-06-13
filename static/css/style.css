@@ -888,7 +888,6 @@ html.dark .privacy-group { background-color: #042f2e; color: #5eead4; }
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
     gap: 8px;
-    max-height: 500px; /* cap the grid so single images don't go full-screen-tall */
 }
 .post-media-item {
     position: relative;
@@ -897,7 +896,6 @@ html.dark .privacy-group { background-color: #042f2e; color: #5eead4; }
     overflow: hidden;
     border-radius: 8px;
     cursor: pointer;
-    max-height: 500px; /* belt AND braces */
 }
 .post-media-item img,
 .post-media-item video {
