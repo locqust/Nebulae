@@ -57,7 +57,7 @@ def get_thumbnail_path(media_file_path, source_type='media', user_path=''):
     return full_thumb_path
 
 
-def create_thumbnail(source_full_path, thumbnail_path, size=(400, 400)):
+def create_thumbnail(source_full_path, thumbnail_path, size=(800, 800)):
     """
     Create a thumbnail from an image.
     
