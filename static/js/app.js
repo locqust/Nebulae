@@ -631,6 +631,12 @@ App.Media = {
                     }
                 }
             },
+            'coverSelect': () => {
+                const path = data.selectedMedia && data.selectedMedia[0] ? data.selectedMedia[0].media_file_path : null;
+                if (path && App.Profile.Cover && typeof App.Profile.Cover.handleBrowserSelection === 'function') {
+                    App.Profile.Cover.handleBrowserSelection(path);
+                }
+            },
             'dmMedia': () => {
                 // Handled by the conversation page's own message/BroadcastChannel listener.
                 // This entry just silences the console.warn for unhandled mode.
@@ -2647,6 +2653,149 @@ App.Profile = {
         }
     },
 
+    /**
+     * Profile picture modal — opens the choose-method modal, then hands off
+     * to the existing Cropper once a file is selected or browsed.
+     */
+    Picture: {
+        openModal() {
+            App.Modal.open('profilePictureModal');
+        }
+    },
+
+    /**
+     * Cover picture management — modal with upload/browse tabs and Cropper.js pan+zoom.
+     */
+    Cover: {
+        _cropperInstance: null,
+
+        openModal() {
+            this.resetToButtons();
+            App.Modal.open('coverPictureModal');
+        },
+
+        /** Show the action buttons, hide cropper */
+        resetToButtons() {
+            const buttons = document.getElementById('coverActionButtons');
+            const cropperArea = document.getElementById('coverCropperArea');
+            if (buttons) buttons.classList.remove('hidden');
+            if (cropperArea) cropperArea.classList.add('hidden');
+            const fileInput = document.getElementById('cover_picture_file_input');
+            if (fileInput) fileInput.value = '';
+            if (this._cropperInstance) {
+                this._cropperInstance.destroy();
+                this._cropperInstance = null;
+            }
+        },
+
+        handleFileSelect(input) {
+            if (!input.files || !input.files[0]) return;
+            const reader = new FileReader();
+            reader.onload = (e) => this._initCropper(e.target.result);
+            reader.readAsDataURL(input.files[0]);
+        },
+
+        /** Called from the media browser's BroadcastChannel when mode === 'coverSelect' */
+        handleBrowserSelection(path) {
+            if (!path) return;
+            const imageUrl = `${window.appConfig.serveMediaBaseUrl}${window.appConfig.loggedInUserPuid}/${path}`;
+            App.Modal.open('coverPictureModal');
+            this._initCropper(imageUrl);
+        },
+
+        openMediaBrowser() {
+            sessionStorage.setItem('mediaBrowserMode', 'coverSelect');
+            const baseBrowseUrl = window.appConfig.browseMediaBaseUrl;
+            const separator = baseBrowseUrl.includes('?') ? '&' : '?';
+            window.open(`${baseBrowseUrl}${separator}selected=[]`, '_blank', 'width=800,height=600');
+        },
+
+        _initCropper(imageUrl) {
+            const buttons = document.getElementById('coverActionButtons');
+            const cropperArea = document.getElementById('coverCropperArea');
+            const imageEl = document.getElementById('coverImageToCrop');
+            if (!cropperArea || !imageEl) return;
+
+            if (buttons) buttons.classList.add('hidden');
+            cropperArea.classList.remove('hidden');
+
+            if (this._cropperInstance) {
+                this._cropperInstance.destroy();
+                this._cropperInstance = null;
+            }
+
+            imageEl.src = imageUrl;
+            imageEl.onload = () => {
+                this._cropperInstance = new Cropper(imageEl, {
+                    aspectRatio: NaN,
+                    viewMode: 1,
+                    dragMode: 'move',
+                    cropBoxMovable: true,
+                    cropBoxResizable: true,
+                    toggleDragModeOnDblclick: false,
+                    background: true,
+                    guides: true,
+                    center: true,
+                    highlight: false,
+                    autoCropArea: 1.0,
+                    responsive: true,
+                    scalable: true,
+                    zoomable: true,
+                    movable: true,
+                    zoomOnWheel: true,
+                    wheelZoomRatio: 0.1
+                });
+            };
+            imageEl.onerror = () => {
+                App.Modal.showInfo('Failed to load image.');
+                this.resetToButtons();
+            };
+        },
+
+        applyCrop() {
+            if (!this._cropperInstance) {
+                App.Modal.showInfo('No image loaded.');
+                return;
+            }
+            const canvas = this._cropperInstance.getCroppedCanvas({ maxWidth: 1500, maxHeight: 600 });
+            if (!canvas || canvas.width === 0) {
+                App.Modal.showInfo('Failed to process image.');
+                return;
+            }
+
+            const base64Data = canvas.toDataURL('image/jpeg', 0.92);
+            const formData = new FormData();
+            formData.append('cover_image_data', base64Data);
+
+            fetch('/upload_cover_picture', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        App.Modal.close('coverPictureModal');
+                        App.Toast.show('Cover photo updated!', 'success');
+                        const bannerDiv = document.querySelector('.profile-cover-banner');
+                        if (bannerDiv) {
+                            let img = bannerDiv.querySelector('img#cover-picture-display');
+                            if (img) {
+                                img.src = data.cover_url + '?t=' + Date.now();
+                            } else {
+                                img = document.createElement('img');
+                                img.id = 'cover-picture-display';
+                                img.alt = 'Cover Photo';
+                                img.className = 'w-full h-full object-cover';
+                                img.src = data.cover_url + '?t=' + Date.now();
+                                bannerDiv.insertBefore(img, bannerDiv.firstChild);
+                            }
+                        }
+                        if (this._cropperInstance) { this._cropperInstance.destroy(); this._cropperInstance = null; }
+                    } else {
+                        App.Modal.showInfo('Error: ' + (data.error || 'Cover photo upload failed.'));
+                    }
+                })
+                .catch(() => App.Modal.showInfo('An unexpected error occurred.'));
+        }
+    },
+
     Info: {
         init() {
             const form = document.getElementById('profileInfoForm');
@@ -3275,7 +3424,102 @@ App.Group = {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
-    }
+    },
+
+    Picture: {
+        openModal() { App.Modal.open('groupPictureModal'); }
+    },
+
+    Cover: {
+        _cropperInstance: null,
+
+        openModal() {
+            this.resetToButtons();
+            App.Modal.open('groupCoverModal');
+        },
+
+        resetToButtons() {
+            const btns = document.getElementById('groupCoverActionButtons');
+            const area = document.getElementById('groupCoverCropperArea');
+            if (btns) btns.classList.remove('hidden');
+            if (area) area.classList.add('hidden');
+            const fi = document.getElementById('group_cover_file_input');
+            if (fi) fi.value = '';
+            if (this._cropperInstance) { this._cropperInstance.destroy(); this._cropperInstance = null; }
+        },
+
+        handleFileSelect(input) {
+            if (!input.files || !input.files[0]) return;
+            const reader = new FileReader();
+            reader.onload = (e) => this._initCropper(e.target.result);
+            reader.readAsDataURL(input.files[0]);
+        },
+
+        _initCropper(imageUrl) {
+            const btns = document.getElementById('groupCoverActionButtons');
+            const area = document.getElementById('groupCoverCropperArea');
+            const img = document.getElementById('groupCoverImageToCrop');
+            if (!area || !img) return;
+            if (btns) btns.classList.add('hidden');
+            area.classList.remove('hidden');
+            if (this._cropperInstance) { this._cropperInstance.destroy(); this._cropperInstance = null; }
+            img.src = imageUrl;
+            img.onload = () => {
+                this._cropperInstance = new Cropper(img, {
+                    aspectRatio: NaN,
+                    viewMode: 1,
+                    dragMode: 'move',
+                    autoCropArea: 1.0,
+                    cropBoxMovable: true,
+                    cropBoxResizable: true,
+                    guides: true,
+                    responsive: true,
+                    zoomable: true,
+                    zoomOnWheel: true,
+                    wheelZoomRatio: 0.1
+                });
+            };
+            img.onerror = () => { App.Modal.showInfo('Failed to load image.'); this.resetToButtons(); };
+        },
+
+        applyCrop() {
+            if (!this._cropperInstance) { App.Modal.showInfo('No image loaded.'); return; }
+            const canvas = this._cropperInstance.getCroppedCanvas({ maxWidth: 1500, maxHeight: 600 });
+            if (!canvas || canvas.width === 0) { App.Modal.showInfo('Failed to process image.'); return; }
+            const base64Data = canvas.toDataURL('image/jpeg', 0.92);
+            const formData = new FormData();
+            formData.append('cover_image_data', base64Data);
+            // Group puid is passed via the button in group_profile.html
+            const groupPuid = document.querySelector('[data-group-puid]')?.dataset.groupPuid
+                           || window.location.pathname.split('/').pop();
+            fetch(`/groups/${groupPuid}/upload_cover`, { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        App.Modal.close('groupCoverModal');
+                        App.Toast.show('Cover photo updated!', 'success');
+                        const bannerDiv = document.querySelector('.profile-cover-banner');
+                        if (bannerDiv) {
+                            let img = bannerDiv.querySelector('img#cover-picture-display');
+                            if (img) {
+                                img.src = data.cover_url + '?t=' + Date.now();
+                            } else {
+                                img = document.createElement('img');
+                                img.id = 'cover-picture-display';
+                                img.alt = 'Cover Photo';
+                                img.className = 'w-full h-full object-cover';
+                                img.src = data.cover_url + '?t=' + Date.now();
+                                bannerDiv.insertBefore(img, bannerDiv.firstChild);
+                            }
+                        }
+                        if (this._cropperInstance) { this._cropperInstance.destroy(); this._cropperInstance = null; }
+                    } else {
+                        App.Modal.showInfo('Error: ' + (data.error || 'Cover photo upload failed.'));
+                    }
+                })
+                .catch(() => App.Modal.showInfo('An unexpected error occurred.'));
+        }
+    },
 };
 
 /**
@@ -6596,6 +6840,241 @@ async respond(eventPuid, response) {
             button.textContent = 'Invite';
         }
     },
+    /**
+     * Event cover photo — two-step cropper.
+     * Step 1: wide banner crop (16:5). Step 2: square thumbnail crop (1:1).
+     * Both sent to /events/<puid>/upload_cover in one POST.
+     */
+    Cover: {
+        _cropperInstance: null,
+        _step: 1,
+        _bannerBase64: null,
+        _eventPuid: null,
+
+        open(eventPuid) {
+            this._eventPuid = eventPuid;
+            this._step = 1;
+            this._bannerBase64 = null;
+            this._resetToButtons();
+            App.Modal.open('eventCoverModal');
+        },
+
+        _resetToButtons() {
+            const btns = document.getElementById('eventCoverActionButtons');
+            const step1 = document.getElementById('eventCoverStep1');
+            const step2 = document.getElementById('eventCoverStep2');
+            if (btns) btns.classList.remove('hidden');
+            if (step1) step1.classList.add('hidden');
+            if (step2) step2.classList.add('hidden');
+            const fi = document.getElementById('event_cover_file_input');
+            if (fi) fi.value = '';
+            this._destroyCropper();
+        },
+
+        _destroyCropper() {
+            if (this._cropperInstance) { this._cropperInstance.destroy(); this._cropperInstance = null; }
+        },
+
+        handleFileSelect(input) {
+            if (!input.files || !input.files[0]) return;
+            const reader = new FileReader();
+            reader.onload = (e) => this._initStep1(e.target.result);
+            reader.readAsDataURL(input.files[0]);
+        },
+
+        _initStep1(imageUrl) {
+            const btns = document.getElementById('eventCoverActionButtons');
+            const step1 = document.getElementById('eventCoverStep1');
+            const img = document.getElementById('eventCoverImageToCrop');
+            if (!step1 || !img) return;
+            if (btns) btns.classList.add('hidden');
+            step1.classList.remove('hidden');
+            this._step = 1;
+            this._destroyCropper();
+            img.src = imageUrl;
+            img.onload = () => {
+                this._cropperInstance = new Cropper(img, {
+                    aspectRatio: 16 / 5,
+                    viewMode: 1,
+                    dragMode: 'move',
+                    autoCropArea: 1.0,
+                    cropBoxMovable: true,
+                    cropBoxResizable: true,
+                    guides: true,
+                    responsive: true,
+                    zoomable: true,
+                    zoomOnWheel: true,
+                    wheelZoomRatio: 0.1
+                });
+            };
+        },
+
+        confirmBannerCrop() {
+            if (!this._cropperInstance) return;
+            const canvas = this._cropperInstance.getCroppedCanvas({ maxWidth: 1500 });
+            if (!canvas) return;
+            this._bannerBase64 = canvas.toDataURL('image/jpeg', 0.92);
+            const step1 = document.getElementById('eventCoverStep1');
+            const step2 = document.getElementById('eventCoverStep2');
+            const squareImg = document.getElementById('eventSquareImageToCrop');
+            const originalImg = document.getElementById('eventCoverImageToCrop');
+            if (!step2 || !squareImg) return;
+            step1.classList.add('hidden');
+            step2.classList.remove('hidden');
+            this._step = 2;
+            this._destroyCropper();
+            squareImg.src = originalImg ? originalImg.src : this._bannerBase64;
+            squareImg.onload = () => {
+                this._cropperInstance = new Cropper(squareImg, {
+                    aspectRatio: 1,
+                    viewMode: 1,
+                    dragMode: 'move',
+                    autoCropArea: 0.8,
+                    cropBoxMovable: true,
+                    cropBoxResizable: true,
+                    guides: true,
+                    responsive: true,
+                    zoomable: true,
+                    zoomOnWheel: true,
+                    wheelZoomRatio: 0.1
+                });
+            };
+        },
+
+        backToBannerCrop() {
+            const step1 = document.getElementById('eventCoverStep1');
+            const step2 = document.getElementById('eventCoverStep2');
+            if (!step1 || !step2) return;
+            step2.classList.add('hidden');
+            step1.classList.remove('hidden');
+            this._step = 1;
+            this._destroyCropper();
+            const img = document.getElementById('eventCoverImageToCrop');
+            if (img && img.complete && img.src) {
+                img.onload = () => {
+                    this._cropperInstance = new Cropper(img, {
+                        aspectRatio: 16 / 5,
+                        viewMode: 1, dragMode: 'move', autoCropArea: 1.0,
+                        cropBoxMovable: true, cropBoxResizable: true,
+                        guides: true, responsive: true,
+                        zoomable: true, zoomOnWheel: true, wheelZoomRatio: 0.1
+                    });
+                };
+                img.onload(); // already loaded, trigger manually
+            }
+        },
+
+        submitBothCrops() {
+            if (!this._cropperInstance || !this._bannerBase64) {
+                App.Modal.showInfo('Please complete both crops first.');
+                return;
+            }
+            const squareCanvas = this._cropperInstance.getCroppedCanvas({ maxWidth: 800, maxHeight: 800 });
+            if (!squareCanvas) return;
+            const squareBase64 = squareCanvas.toDataURL('image/jpeg', 0.92);
+            const formData = new FormData();
+            formData.append('cover_image_data', this._bannerBase64);
+            formData.append('square_image_data', squareBase64);
+            fetch(`/events/${this._eventPuid}/upload_cover`, { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        App.Modal.close('eventCoverModal');
+                        App.Toast.show('Event cover updated!', 'success');
+                        const bannerDiv = document.querySelector('.profile-cover-banner');
+                        if (bannerDiv) {
+                            let img = bannerDiv.querySelector('img');
+                            if (img) {
+                                img.src = data.cover_url + '?t=' + Date.now();
+                            } else {
+                                img = document.createElement('img');
+                                img.alt = 'Event Cover';
+                                img.className = 'w-full h-full object-cover';
+                                img.src = data.cover_url + '?t=' + Date.now();
+                                bannerDiv.insertBefore(img, bannerDiv.firstChild);
+                            }
+                        }
+                        this._destroyCropper();
+                    } else {
+                        App.Modal.showInfo('Error: ' + (data.error || 'Upload failed.'));
+                    }
+                })
+                .catch(() => App.Modal.showInfo('An unexpected error occurred.'));
+        }
+    },
+};
+
+/**
+ * @namespace App.Shortcuts
+ * @description Handles starring/unstarring profile pages, groups and public pages
+ * as sidebar shortcuts. Wired to the star button in identity bars.
+ */
+App.Shortcuts = {
+ 
+    /**
+     * Toggle a shortcut on or off.
+     * Called by the star button: onclick="App.Shortcuts.toggle(this, 'user', '{{ puid }}')"
+     *
+     * @param {HTMLElement} buttonEl - The star button element
+     * @param {string} entityType   - 'user' or 'group'
+     * @param {string} entityPuid   - The entity's PUID
+     */
+    toggle(buttonEl, entityType, entityPuid) {
+        const isCurrentlyStarred = buttonEl.dataset.shortcutted === 'true';
+        const endpoint = isCurrentlyStarred ? '/shortcuts/remove' : '/shortcuts/add';
+ 
+        // Optimistic UI update
+        this._setStarState(buttonEl, !isCurrentlyStarred);
+ 
+        fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ entity_type: entityType, entity_puid: entityPuid })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) {
+                // Revert on failure
+                this._setStarState(buttonEl, isCurrentlyStarred);
+                App.Modal.showInfo(data.error || 'Could not update shortcut.');
+            }
+            // Success — state already updated optimistically
+        })
+        .catch(() => {
+            this._setStarState(buttonEl, isCurrentlyStarred);
+            App.Modal.showInfo('An unexpected error occurred.');
+        });
+    },
+ 
+    /**
+     * Update the star button's visual state.
+     * Swaps background shade between starred/unstarred. Text is always white.
+     * @param {HTMLElement} buttonEl
+     * @param {boolean} starred
+     */
+    _setStarState(buttonEl, starred) {
+        buttonEl.dataset.shortcutted = starred ? 'true' : 'false';
+ 
+        const starFilled = buttonEl.querySelector('.star-filled');
+        const starEmpty  = buttonEl.querySelector('.star-empty');
+        const label      = buttonEl.querySelector('.star-label');
+ 
+        if (starFilled) starFilled.classList.toggle('hidden', !starred);
+        if (starEmpty)  starEmpty.classList.toggle('hidden', starred);
+        if (label)      label.textContent = starred ? 'Shortcutted' : 'Add to shortcuts';
+ 
+        // Swap background shade — text stays white in both states
+        if (starred) {
+            buttonEl.classList.remove('bg-yellow-400', 'hover:bg-yellow-500');
+            buttonEl.classList.add('bg-yellow-500', 'hover:bg-yellow-600');
+        } else {
+            buttonEl.classList.remove('bg-yellow-500', 'hover:bg-yellow-600');
+            buttonEl.classList.add('bg-yellow-400', 'hover:bg-yellow-500');
+        }
+        // Ensure text is always white, strip any stale colour classes
+        buttonEl.classList.add('text-white');
+        buttonEl.classList.remove('text-yellow-400', 'text-gray-400', 'text-gray-900');
+    }
 };
 
 /**

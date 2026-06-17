@@ -12,7 +12,7 @@ from db import get_db
 # Using 'SELECT *' can sometimes be unreliable if the table schema changes
 # or in certain database configurations.
 # MODIFICATION: Add the new 'email' column to the list of columns to be fetched.
-USER_COLUMNS = "id, puid, username, password, email, display_name, user_type, hostname, password_must_change, media_path, uploads_path, profile_picture_path, original_profile_picture_path"
+USER_COLUMNS = "id, puid, username, password, email, display_name, user_type, hostname, password_must_change, media_path, uploads_path, profile_picture_path, original_profile_picture_path, cover_picture_path"
 
 def get_user_by_username(username):
     """
@@ -223,6 +223,29 @@ def update_user_profile_picture_path(puid, profile_picture_path, original_profil
         db.rollback()
         return False
 
+def update_user_cover_picture_path(puid, cover_picture_path):
+    """
+    Updates a user's cover/banner picture path.
+    Cover photos are local-only and are NOT federated — remote nodes have
+    no use for a cover image since they don't render the profile page.
+    """
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            "UPDATE users SET cover_picture_path = ? WHERE puid = ? AND hostname IS NULL",
+            (cover_picture_path, puid)
+        )
+        if cursor.rowcount > 0:
+            db.commit()
+            return True
+        else:
+            db.rollback()
+            return False
+    except Exception as e:
+        print(f"Error in update_user_cover_picture_path: {e}")
+        db.rollback()
+        return False
 
 def delete_user(username):
     """Deletes a user from the database."""

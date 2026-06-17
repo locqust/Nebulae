@@ -266,27 +266,39 @@
                 <!-- Set is_owner to true since this is the main feed -->
                 {% set is_owner = True %}
                 <div class="profile-sidebar custom-scrollbar space-y-6">
-
+                    
+                    <!-- Identity Strip — compact name/meta + profile link -->
+                    <div class="p-4 rounded-lg shadow-sm border post-card">
+                        <p class="text-base font-semibold text-gray-900 dark:text-white leading-tight">
+                            {{ current_user_profile.display_name or username }}
+                        </p>
+                        <p class="text-xs text-gray-600 dark:text-gray-400 mt-0.5">@{{ username }}</p>
+                        <a href="{{ url_for('main.user_profile', puid=current_user_puid) }}"
+                           class="text-xs text-blue-500 dark:text-blue-400 hover:underline mt-2 inline-block">
+                            View my profile →
+                        </a>
+                    </div>
+                    
                     <!-- Quick Actions Card -->
                     {% if is_owner %}
-                    <div class="p-4 rounded-lg shadow-sm border post-card">
+                    <div class="p-6 rounded-lg shadow-sm border post-card">
                         <div class="space-y-2">
-                            <button type="button" onclick="openCreateEventModal('user', '{{ current_user_puid }}', '{{ (current_user_profile.display_name or username) | js_string }}')" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-1.5 px-2 rounded-lg shadow-sm transition duration-300 ease-in-out text-xs inline-flex items-center justify-center gap-1">
-                                <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <button type="button" onclick="openCreateEventModal('user', '{{ current_user_puid }}', '{{ (current_user_profile.display_name or username) | js_string }}')" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition duration-300 ease-in-out text-sm inline-flex items-center justify-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                                 </svg>
                                 Create Event
                             </button>
                             <button onclick="fetchDiscoverableUsers()"
-                                    class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-1.5 px-2 rounded-lg shadow-sm transition duration-300 ease-in-out text-xs inline-flex items-center justify-center gap-1">
-                                <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition duration-300 ease-in-out text-sm inline-flex items-center justify-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path>
                                 </svg>
                                 Discover Users
                             </button>
                             <button onclick="openModal('discoverGroupsModal'); fetchDiscoverableGroups();"
-                                    class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-semibold py-1.5 px-2 rounded-lg shadow-sm transition duration-300 ease-in-out text-xs inline-flex items-center justify-center gap-1">
-                                <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition duration-300 ease-in-out text-sm inline-flex items-center justify-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z"></path>
                                 </svg>
                                 Discover Groups
@@ -296,8 +308,8 @@
                             {% if is_parent %}
                             <a href="{{ url_for('parental.parental_dashboard') }}" 
                                data-route="/parental/"
-                               class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1.5 px-2 rounded-lg shadow-sm transition duration-300 ease-in-out text-xs inline-flex items-center justify-center gap-1 relative">
-                                <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                               class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition duration-300 ease-in-out text-sm inline-flex items-center justify-center gap-2 relative">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
                                 </svg>
                                 <span>Parental Controls</span>
@@ -309,85 +321,6 @@
                             </a>
                             {% endif %}
                         </div>
-                    </div>
-                    {% endif %}
-                    {% if shortcuts and (shortcuts.users or shortcuts.groups) %}
-                    <div class="p-4 rounded-lg shadow-sm border post-card">
-                        <h3 class="shortcuts-heading">Your Shortcuts</h3>
-                    
-                        {% if shortcuts.users %}
-                        <!-- Friends & Pages -->
-                        <div class="mb-3">
-                            <p class="shortcuts-section-label">Friends &amp; Pages</p>
-                            <ul class="space-y-1">
-                            {% for item in shortcuts.users %}
-                                <li>
-                                    <a href="{{ federated_user_profile_url(item) }}"
-                                    class="shortcuts-item flex items-center gap-2.5 py-1 px-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition">
-                                        <div class="w-7 h-7 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex-shrink-0 flex items-center justify-center">
-                                            {% if item.profile_picture_path %}
-                                                {% if item.hostname %}
-                                                    {% set insecure_mode = config.get('FEDERATION_INSECURE_MODE', False) %}
-                                                    {% set protocol = 'http' if insecure_mode else 'https' %}
-                                                    <img src="{{ protocol }}://{{ item.hostname }}/profile_pictures/{{ item.profile_picture_path }}"
-                                                        alt="{{ item.display_name }}" class="w-full h-full object-cover"
-                                                        onerror="this.src='{{ url_for('static', filename='images/default_avatar.png') }}'">
-                                                {% else %}
-                                                    <img src="{{ url_for('main.serve_profile_picture', filename=item.profile_picture_path) }}"
-                                                        alt="{{ item.display_name }}" class="w-full h-full object-cover">
-                                                {% endif %}
-                                            {% else %}
-                                                <svg class="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
-                                                </svg>
-                                            {% endif %}
-                                        </div>
-                                        <span class="shortcuts-item-name">
-                                            {{ item.display_name }}
-                                        </span>
-                                    </a>
-                                </li>
-                            {% endfor %}
-                            </ul>
-                        </div>
-                        {% endif %}
-                    
-                        {% if shortcuts.groups %}
-                        <!-- Groups -->
-                        <div>
-                            <p class="shortcuts-section-label">Groups</p>
-                            <ul class="space-y-1">
-                            {% for item in shortcuts.groups %}
-                                <li>
-                                    <a href="{{ url_for('groups.group_profile', puid=item.puid) }}"
-                                    class="shortcuts-item flex items-center gap-2.5 py-1 px-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition">
-                                        <div class="w-7 h-7 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex-shrink-0 flex items-center justify-center">
-                                            {% if item.profile_picture_path %}
-                                                {% if item.hostname %}
-                                                    {% set insecure_mode = config.get('FEDERATION_INSECURE_MODE', False) %}
-                                                    {% set protocol = 'http' if insecure_mode else 'https' %}
-                                                    <img src="{{ protocol }}://{{ item.hostname }}/profile_pictures/{{ item.profile_picture_path }}"
-                                                        alt="{{ item.display_name }}" class="w-full h-full object-cover"
-                                                        onerror="this.src='{{ url_for('static', filename='images/default_avatar.png') }}'">
-                                                {% else %}
-                                                    <img src="{{ url_for('main.serve_profile_picture', filename=item.profile_picture_path) }}"
-                                                        alt="{{ item.display_name }}" class="w-full h-full object-cover">
-                                                {% endif %}
-                                            {% else %}
-                                                <svg class="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
-                                                </svg>
-                                            {% endif %}
-                                        </div>
-                                        <span class="shortcuts-item-name">
-                                            {{ item.display_name }}
-                                        </span>
-                                    </a>
-                                </li>
-                            {% endfor %}
-                            </ul>
-                        </div>
-                        {% endif %}
                     </div>
                     {% endif %}
                 </div>

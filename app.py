@@ -33,6 +33,7 @@ from utils.text_processing import linkify_mentions # NEW: Import the mention lin
 from utils.text_processing import linkify_urls # NEW: Import the url linkify function
 from routes.push_notifications import push_notifications_bp
 from routes.parental import parental_bp
+from routes.shortcuts import shortcuts_bp
 
 # Application version
 __version__ = "0.9.4.1-beta"
@@ -744,6 +745,7 @@ app.register_blueprint(discovery_filters_bp)
 app.register_blueprint(polls_bp)
 app.register_blueprint(two_factor_bp)
 app.register_blueprint(parental_bp)
+app.register_blueprint(shortcuts_bp)
 app.register_blueprint(conversations_bp, url_prefix='/conversations')
 
 @app.route('/offline')

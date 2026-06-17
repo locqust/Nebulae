@@ -835,6 +835,9 @@ def friends_list():
     # NEW: Pass the URL for the friends content to load
     initial_content_url = url_for('friends.get_friends_content')
 
+    from db_queries.shortcuts import get_user_shortcuts
+    shortcuts = get_user_shortcuts(current_user_id) if user_data and not session.get('is_admin') else {'users': [], 'groups': []}
+
     return render_template('index.html',
                            username=current_username,
                            user_media_path=user_media_path,
@@ -843,6 +846,7 @@ def friends_list():
                            current_user_profile=current_user_profile,
                            viewer_home_url=viewer_home_url,
                            viewer_puid_for_js=current_user_puid,
+                           shortcuts=shortcuts,
                            initial_content_url=initial_content_url)
 
 

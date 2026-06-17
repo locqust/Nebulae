@@ -385,6 +385,30 @@ def update_event_picture_path(event_puid, profile_picture_path, original_profile
         print(f"Error updating event picture path: {e}")
         return False
 
+def update_event_cover_picture_path(event_puid, cover_picture_path):
+    """
+    Updates an event's cover/banner picture path.
+    The cover is the wide landscape version used as the page banner.
+    The existing profile_picture_path (square) is unchanged — it still
+    drives discover events, feed post avatars, and federation payloads.
+    """
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            "UPDATE events SET cover_picture_path = ? WHERE puid = ?",
+            (cover_picture_path, event_puid)
+        )
+        if cursor.rowcount > 0:
+            db.commit()
+            return True
+        db.rollback()
+        return False
+    except Exception as e:
+        print(f"Error in update_event_cover_picture_path: {e}")
+        db.rollback()
+        return False
+
 def update_event_details(puid, title, event_datetime, location, details, updated_by_user, event_end_datetime=None, distribute=True):
     """Updates the details of an event, creates a post about the update, and notifies attendees."""
     from .posts import add_post, get_post_by_cuid

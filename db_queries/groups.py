@@ -636,6 +636,29 @@ def update_group_profile_picture_path(group_puid, profile_picture_path, original
         db.rollback()
         return False
 
+def update_group_cover_picture_path(group_puid, cover_picture_path):
+    """
+    Updates a group's cover/banner picture path.
+    Cover photos are local-only — they are not distributed to remote nodes.
+    """
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            "UPDATE groups SET cover_picture_path = ? WHERE puid = ?",
+            (cover_picture_path, group_puid)
+        )
+        if cursor.rowcount > 0:
+            db.commit()
+            return True
+        db.rollback()
+        return False
+    except Exception as e:
+        print(f"Error in update_group_cover_picture_path: {e}")
+        db.rollback()
+        return False
+ 
+
 def get_user_groups(user_id):
     """Retrieves all groups a user is a member of, including remote group hostnames."""
     db = get_db()

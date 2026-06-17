@@ -56,6 +56,9 @@ def parental_dashboard():
     # Pass the URL for the parental dashboard content to load
     initial_content_url = url_for('parental.get_parental_dashboard_content')
     
+    from db_queries.shortcuts import get_user_shortcuts
+    shortcuts = get_user_shortcuts(current_user['id']) if not session.get('is_admin') else {'users': [], 'groups': []}
+
     return render_template('index.html',
                            username=session.get('username'),
                            user_media_path=user_media_path,
@@ -64,6 +67,7 @@ def parental_dashboard():
                            current_user_profile=current_user_profile,
                            viewer_home_url=viewer_home_url,
                            viewer_puid_for_js=current_user_puid,
+                           shortcuts=shortcuts,
                            initial_content_url=initial_content_url)
 
 

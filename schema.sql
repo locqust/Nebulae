@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
     uploads_path TEXT,
     profile_picture_path TEXT,
     original_profile_picture_path TEXT,
+    cover_picture_path TEXT, -- Profile banner/cover photo
     user_type TEXT NOT NULL DEFAULT 'user', -- 'user', 'admin', 'remote', 'public_page'
     password_must_change BOOLEAN DEFAULT FALSE, -- Force password change on next login
     requires_parental_approval BOOLEAN DEFAULT FALSE,
@@ -60,6 +61,7 @@ CREATE TABLE IF NOT EXISTS events (
 	is_cancelled BOOLEAN DEFAULT FALSE, -- NEW: Flag to indicate if the event is cancelled
 	hostname TEXT, -- FEDERATION: The hostname where the event originated
     is_remote BOOLEAN DEFAULT FALSE, -- FEDERATION: Flag if this is a stub for a remote event
+    cover_picture_path TEXT, -- Wide banner/cover photo (separate from square profile_picture_path)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -479,6 +481,7 @@ CREATE TABLE IF NOT EXISTS groups (
     is_remote BOOLEAN DEFAULT FALSE, -- FEDERATION FIX: Flag to indicate if the group is from a remote node
     join_rules TEXT, -- NEW: Rules text that users must agree to
     join_questions TEXT, -- NEW: JSON array of questions
+    cover_picture_path TEXT, -- Group banner/cover photo
     FOREIGN KEY (created_by_user_id) REFERENCES users(id),
     FOREIGN KEY (initial_admin_id) REFERENCES users(id)
 );
@@ -671,5 +674,18 @@ CREATE TABLE IF NOT EXISTS dm_blocks (
 
 CREATE INDEX IF NOT EXISTS idx_dm_blocks_blocker ON dm_blocks(blocker_id);
 CREATE INDEX IF NOT EXISTS idx_dm_blocks_blocked ON dm_blocks(blocked_id);
+
+-- User shortcuts (favourites) — sidebar quick-access to friends, groups and pages
+CREATE TABLE IF NOT EXISTS user_shortcuts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    entity_type TEXT NOT NULL CHECK(entity_type IN ('user', 'group')),
+    entity_puid TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, entity_type, entity_puid),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_shortcuts_user ON user_shortcuts(user_id);
 
 

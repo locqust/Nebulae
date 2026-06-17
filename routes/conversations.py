@@ -96,6 +96,9 @@ def messages_page():
     initial_content_url = url_for('conversations.messages_page_api')
     user_settings = get_user_settings(current_user['id'])
 
+    from db_queries.shortcuts import get_user_shortcuts
+    shortcuts = get_user_shortcuts(current_user['id']) if not session.get('is_admin') else {'users': [], 'groups': []}
+
     return render_template('index.html',
                            username=current_user.get('username'),
                            user_media_path=current_user.get('media_path'),
@@ -105,6 +108,7 @@ def messages_page():
                            viewer_home_url=viewer_home_url,
                            viewer_puid_for_js=current_user.get('puid'),
                            initial_content_url=initial_content_url,
+                           shortcuts=shortcuts,
                            user_settings=user_settings)
 
 

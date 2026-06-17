@@ -260,6 +260,11 @@ def group_profile(puid):
 
     from db_queries.parental_controls import requires_parental_approval
     
+    from db_queries.shortcuts import is_shortcutted as check_shortcutted
+    is_shortcutted = False
+    if current_viewer_id and not session.get('is_admin'):
+        is_shortcutted = check_shortcutted(current_viewer_id, 'group', group['puid'])
+
     # Add to context
     current_user_requires_parental_approval = requires_parental_approval(current_user_id) if current_user_id else False
 
@@ -293,6 +298,7 @@ def group_profile(puid):
                            unread_notification_count=unread_count,
                            members_count=members_count,
                            viewer_puid_for_js=viewer_puid,
+                           is_shortcutted=is_shortcutted,
                            current_user_requires_parental_approval=current_user_requires_parental_approval)
 
 
@@ -587,6 +593,9 @@ def my_groups():
     # NEW: Pass the URL for the "My Groups" content to load
     initial_content_url = url_for('groups.get_my_groups_content')
 
+    from db_queries.shortcuts import get_user_shortcuts
+    shortcuts = get_user_shortcuts(current_user['id']) if not session.get('is_admin') else {'users': [], 'groups': []}
+
     return render_template('index.html',
                            username=session.get('username'),
                            user_media_path=user_media_path,
@@ -595,6 +604,7 @@ def my_groups():
                            current_user_profile=current_user_profile,
                            viewer_home_url=viewer_home_url,
                            viewer_puid_for_js=current_user_puid,
+                           shortcuts=shortcuts,
                            initial_content_url=initial_content_url)
 
 
@@ -1569,6 +1579,61 @@ def upload_group_picture(puid):
 
     return redirect(url_for('groups.group_profile', puid=puid))
 
+@groups_bp.route('/<puid>/upload_cover', methods=['POST'])
+def upload_group_cover(puid):
+    """
+    Handles uploading a cover/banner picture for a group.
+    Accepts base64-encoded image data, same pattern as upload_cover_picture
+    in routes/main.py for user profiles.
+    """
+    if 'username' not in session:
+        return jsonify({'error': 'Authentication required.'}), 401
+ 
+    from db_queries.users import get_user_by_username
+    from db_queries.groups import get_group_by_puid, is_user_group_admin
+ 
+    current_user = get_user_by_username(session['username'])
+    group = get_group_by_puid(puid)
+ 
+    if not current_user or not group:
+        return jsonify({'error': 'Not found.'}), 404
+ 
+    if not is_user_group_admin(current_user['id'], group['id']):
+        return jsonify({'error': 'Unauthorized.'}), 403
+ 
+    cover_image_data = request.form.get('cover_image_data')
+    if not cover_image_data:
+        return jsonify({'error': 'No image data received.'}), 400
+ 
+    try:
+        header, encoded = cover_image_data.split(',', 1)
+        mime_type = header.split(';')[0].split(':')[1]
+        ext = mime_type.split('/')[-1]
+        decoded = base64.b64decode(encoded)
+ 
+        cover_dir = os.path.join(
+            current_app.config['PROFILE_PICTURE_STORAGE_DIR'],
+            'group_pics', group['puid'], 'cover'
+        )
+        os.makedirs(cover_dir, exist_ok=True)
+ 
+        cover_filename = f"cover.{ext}"
+        file_path = os.path.join(cover_dir, cover_filename)
+        with open(file_path, 'wb') as f:
+            f.write(decoded)
+ 
+        cover_picture_path = os.path.join('group_pics', group['puid'], 'cover', cover_filename)
+ 
+        from db_queries.groups import update_group_cover_picture_path
+        if not update_group_cover_picture_path(group['puid'], cover_picture_path):
+            return jsonify({'error': 'Failed to save cover picture path.'}), 500
+ 
+        cover_url = url_for('main.serve_profile_picture', filename=cover_picture_path)
+        return jsonify({'success': True, 'cover_url': cover_url}), 200
+ 
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'Error processing image: {e}'}), 500
 
 @groups_bp.route('/leave/<puid>', methods=['POST'])
 def leave_group_route(puid):

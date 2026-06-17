@@ -110,6 +110,9 @@ def events_home():
     # NEW: Pass the URL for the "My Events" content to load
     initial_content_url = url_for('events.get_events_content')
 
+    from db_queries.shortcuts import get_user_shortcuts
+    shortcuts = get_user_shortcuts(current_user['id']) if user_data and not session.get('is_admin') else {'users': [], 'groups': []}
+
     return render_template('index.html',
                            username=current_username,
                            user_media_path=user_media_path,
@@ -118,6 +121,7 @@ def events_home():
                            current_user_profile=current_user_profile,
                            viewer_home_url=viewer_home_url,
                            viewer_puid_for_js=current_user_puid,
+                           shortcuts=shortcuts,
                            initial_content_url=initial_content_url)
 
 
@@ -955,6 +959,76 @@ def upload_event_picture(puid):
             traceback.print_exc()
 
     return redirect(url_for('events.event_profile', puid=puid))
+
+@events_bp.route('/<puid>/upload_cover', methods=['POST'])
+def upload_event_cover(puid):
+    """
+    Handles uploading the event cover banner and (optionally) re-cropping
+    the square thumbnail from the same image.
+ 
+    Expects multipart/form-data with:
+      cover_image_data  — base64 JPEG of the landscape crop (required)
+      square_image_data — base64 JPEG of the square crop (optional; updates
+                          profile_picture_path if provided)
+    """
+    if 'username' not in session:
+        return jsonify({'error': 'Authentication required.'}), 401
+ 
+    current_user = get_user_by_username(session['username'])
+    event = get_event_by_puid(puid)
+    if not event or event['created_by_user_puid'] != current_user['puid']:
+        return jsonify({'error': 'Unauthorized.'}), 403
+ 
+    cover_image_data = request.form.get('cover_image_data')
+    square_image_data = request.form.get('square_image_data')
+ 
+    if not cover_image_data:
+        return jsonify({'error': 'No cover image data received.'}), 400
+ 
+    event_pic_dir = os.path.join(
+        current_app.config['PROFILE_PICTURE_STORAGE_DIR'], 'event_pics', event['puid']
+    )
+    os.makedirs(event_pic_dir, exist_ok=True)
+ 
+    try:
+        # ── Save the wide cover ──────────────────────────────────────────────
+        header, encoded = cover_image_data.split(',', 1)
+        mime_type = header.split(';')[0].split(':')[1]
+        ext = mime_type.split('/')[-1]
+        decoded = base64.b64decode(encoded)
+ 
+        cover_filename = f"event_cover.{ext}"
+        cover_path = os.path.join(event_pic_dir, cover_filename)
+        with open(cover_path, 'wb') as f:
+            f.write(decoded)
+ 
+        cover_picture_path = os.path.join('event_pics', event['puid'], cover_filename)
+ 
+        from db_queries.events import update_event_cover_picture_path
+        if not update_event_cover_picture_path(event['puid'], cover_picture_path):
+            return jsonify({'error': 'Failed to save cover picture path.'}), 500
+ 
+        # ── Optionally save the square thumbnail ─────────────────────────────
+        if square_image_data:
+            sq_header, sq_encoded = square_image_data.split(',', 1)
+            sq_mime = sq_header.split(';')[0].split(':')[1]
+            sq_ext = sq_mime.split('/')[-1]
+            sq_decoded = base64.b64decode(sq_encoded)
+ 
+            sq_filename = f"event_pic.{sq_ext}"
+            sq_path = os.path.join(event_pic_dir, sq_filename)
+            with open(sq_path, 'wb') as f:
+                f.write(sq_decoded)
+ 
+            square_picture_path = os.path.join('event_pics', event['puid'], sq_filename)
+            update_event_picture_path(event['puid'], square_picture_path)
+ 
+        cover_url = url_for('main.serve_event_picture', filename=cover_picture_path)
+        return jsonify({'success': True, 'cover_url': cover_url}), 200
+ 
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'Error processing image: {e}'}), 500
 
 @events_bp.route('/<puid>/edit', methods=['POST'])
 def edit_event_route(puid):

@@ -100,7 +100,10 @@ def index():
     initial_content_url = url_for('main.get_feed_content')
 
     from db_queries.parental_controls import requires_parental_approval
+    from db_queries.shortcuts import get_user_shortcuts
     
+    shortcuts = get_user_shortcuts(current_user_id) if current_user_id and not is_admin_session else {'users': [], 'groups': []}
+
     # Add to context
     current_user_requires_parental_approval = requires_parental_approval(current_user_id) if current_user_id else False
 
@@ -120,6 +123,7 @@ def index():
                            viewer_puid_for_js=viewer_puid_for_js,
                            initial_content_url=initial_content_url,
                            unread_messages_count=unread_messages_count,
+                           shortcuts=shortcuts,
                            current_user_requires_parental_approval=current_user_requires_parental_approval)
 
 
@@ -533,6 +537,9 @@ def my_media_gallery_page():
     # Pass the URL for the "My Media" content to load
     initial_content_url = url_for('main.get_my_media_content')
 
+    from db_queries.shortcuts import get_user_shortcuts
+    shortcuts = get_user_shortcuts(user_data['id']) if user_data and not session.get('is_admin') else {'users': [], 'groups': []}
+
     return render_template('index.html',
                            username=current_username,
                            user_media_path=user_media_path,
@@ -542,6 +549,7 @@ def my_media_gallery_page():
                            viewer_home_url=viewer_home_url,
                            viewer_puid_for_js=current_user_puid,
                            initial_content_url=initial_content_url,
+                           shortcuts=shortcuts,
                            is_my_media_page=True)
 
 
@@ -628,6 +636,9 @@ def view_post(cuid):
         viewer_home_url = f"{protocol}://{current_app.config.get('NODE_HOSTNAME')}"
         viewer_puid_for_js = current_user_puid
 
+    from db_queries.shortcuts import get_user_shortcuts
+    shortcuts = get_user_shortcuts(current_user_id) if current_user_id and not session.get('is_admin') else {'users': [], 'groups': []}
+
     return render_template('index.html',
                            username=current_username,
                            posts=[post],
@@ -637,6 +648,7 @@ def view_post(cuid):
                            current_user_profile=current_user_profile,
                            is_single_post_view=True,
                            viewer_home_url=viewer_home_url,
+                           shortcuts=shortcuts,
                            viewer_puid_for_js=viewer_puid_for_js)
 
 
@@ -1813,6 +1825,66 @@ def upload_profile_picture():
 
     return redirect(url_for('main.user_profile', puid=user_data['puid']))
 
+@main_bp.route('/upload_cover_picture', methods=['POST'])
+def upload_cover_picture():
+    """
+    Handles uploading a cover/banner picture for the logged-in user's profile.
+    Accepts a base64-encoded image (same pattern as upload_profile_picture).
+    Returns JSON so the JS can update the banner without a full page reload.
+    """
+    if 'username' not in session or session.get('is_admin'):
+        return jsonify({'error': 'Authentication required.'}), 401
+ 
+    user_data = get_user_by_username(session['username'])
+    if not user_data:
+        return jsonify({'error': 'User data not found.'}), 404
+ 
+    cover_image_data = request.form.get('cover_image_data')
+    if not cover_image_data:
+        return jsonify({'error': 'No image data received.'}), 400
+ 
+    try:
+        header, encoded_data = cover_image_data.split(',', 1)
+        decoded_image = base64.b64decode(encoded_data)
+        mime_type = header.split(';')[0].split(':')[1]
+        file_extension = mime_type.split('/')[-1]
+ 
+        # Validate extension
+        allowed = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+        if file_extension.lower() not in allowed:
+            return jsonify({'error': 'Invalid image type.'}), 400
+ 
+        # Store cover pictures alongside profile pictures, in a cover/ subfolder
+        # so they don't collide with profile.ext
+        user_cover_dir = os.path.join(
+            current_app.config['PROFILE_PICTURE_STORAGE_DIR'],
+            user_data['puid'],
+            'cover'
+        )
+        os.makedirs(user_cover_dir, exist_ok=True)
+ 
+        cover_filename = f"cover.{file_extension}"
+        file_path = os.path.join(user_cover_dir, cover_filename)
+ 
+        with open(file_path, 'wb') as f:
+            f.write(decoded_image)
+ 
+        # The path stored in the DB is relative to PROFILE_PICTURE_STORAGE_DIR,
+        # matching the convention used by profile_picture_path
+        cover_picture_path = os.path.join(user_data['puid'], 'cover', cover_filename)
+ 
+        from db_queries.users import update_user_cover_picture_path
+        if not update_user_cover_picture_path(user_data['puid'], cover_picture_path):
+            return jsonify({'error': 'Failed to save cover picture path.'}), 500
+ 
+        cover_url = url_for('main.serve_profile_picture', filename=cover_picture_path)
+        return jsonify({'success': True, 'cover_url': cover_url}), 200
+ 
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'Error processing cover image: {e}'}), 500
+ 
+
 @main_bp.route('/thumbnails/<puid>/<path:filename>')
 def serve_thumbnail(puid, filename):
     """
@@ -2040,6 +2112,11 @@ def user_profile(puid):
 
     from db_queries.parental_controls import requires_parental_approval
 
+    from db_queries.shortcuts import is_shortcutted as check_shortcutted
+    is_shortcutted = False
+    if not is_owner and not viewer_is_admin and current_viewer_id:
+        is_shortcutted = check_shortcutted(current_viewer_id, 'user', profile_user['puid'])
+
     # Add to context
     current_user_requires_parental_approval = requires_parental_approval(current_viewer_data['id']) if current_viewer_data else False
 
@@ -2063,6 +2140,7 @@ def user_profile(puid):
                            current_user_requires_parental_approval=current_user_requires_parental_approval,
                            profile_user_requires_parental_approval=profile_user_requires_parental_approval,
                            current_viewer_data=current_viewer_data,
+                           is_shortcutted=is_shortcutted,
                            today_date=date.today().isoformat()
                            )
 
@@ -2234,6 +2312,11 @@ def public_page_profile(puid):
 
     from db_queries.parental_controls import requires_parental_approval
 
+    from db_queries.shortcuts import is_shortcutted as check_shortcutted
+    is_shortcutted = False
+    if not is_owner and not viewer_is_admin and current_viewer_id:
+        is_shortcutted = check_shortcutted(current_viewer_id, 'user', profile_user['puid'])
+
     # Add to context
     current_user_requires_parental_approval = requires_parental_approval(current_viewer_data['id']) if current_viewer_data else False
 
@@ -2255,6 +2338,7 @@ def public_page_profile(puid):
                            is_federated_viewer=is_federated_viewer,
                            viewer_token=session.pop('viewer_token', None),
                            followers_count=followers_count,
+                           is_shortcutted=is_shortcutted,
                            current_user_requires_parental_approval=current_user_requires_parental_approval,
                            # --- FIX: START ---
                            # Pass the new variable to the template

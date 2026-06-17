@@ -169,6 +169,72 @@ body {
 /* --- END BASE STYLES --- */
 
 
+/* --- Cover Banner & Identity Bar --- */
+.profile-cover-banner {
+    width: 100%;
+    border-radius: 0.75rem 0.75rem 0 0;
+    margin-bottom: 0;
+}
+
+.profile-identity-bar {
+    border-radius: 0 0 0.75rem 0.75rem;
+    margin-bottom: 1rem;
+    /* Extra top padding to give the overlapping avatar room */
+    padding-top: 0.5rem;
+}
+
+@media (max-width: 1023px) {
+    .profile-cover-banner {
+        border-radius: 0;
+    }
+    .profile-identity-bar {
+        border-radius: 0;
+        flex-wrap: wrap;
+        padding-top: 0.5rem;
+    }
+}
+/* --- END Cover Banner & Identity Bar --- */
+
+/* --- Shortcuts Sidebar Card --- */
+.shortcuts-heading {
+    color: #6b7280; /* gray-500 */
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.75rem;
+}
+.shortcuts-section-label {
+    color: #9ca3af; /* gray-400 */
+    font-size: 0.75rem;
+    margin-bottom: 0.375rem;
+}
+.shortcuts-item-name {
+    font-size: 0.75rem;
+    color: #374151; /* gray-700 */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color 0.15s;
+}
+.shortcuts-item:hover .shortcuts-item-name {
+    color: #111827; /* gray-900 */
+}
+
+html.dark .shortcuts-heading {
+    color: #ffffff;
+}
+html.dark .shortcuts-section-label {
+    color: #ffffff;
+}
+html.dark .shortcuts-item-name {
+    color: #ffffff;
+}
+html.dark .shortcuts-item:hover .shortcuts-item-name {
+    color: #ffffff;
+}
+/* --- END Shortcuts Sidebar Card --- */
+
 /* --- NEW: Profile Layout Styles --- */
 .sticky-header {
     position: sticky;
@@ -606,12 +672,19 @@ html.dark .flash-warning {
     max-width: 100%; 
     max-height: 100%;
 }
-.cropper-view-box,
-.cropper-face {
+/* Profile picture cropper — circular preview */
+#cropperModal .cropper-view-box,
+#cropperModal .cropper-face {
     border-radius: 50%;
 }
-.cropper-face { pointer-events: all; }
-.cropper-line, .cropper-point { display: none !important; }
+#cropperModal .cropper-face { pointer-events: all; }
+#cropperModal .cropper-line, #cropperModal .cropper-point { display: none !important; }
+
+/* Cover photo cropper — rectangular, show handles */
+#coverPictureModal .cropper-view-box,
+#coverPictureModal .cropper-face {
+    border-radius: 0;
+}
 /* --- END CROPPER MODAL --- */
 
 
