@@ -163,7 +163,7 @@
                     {% if profile_info.hometown and profile_info.hometown.value %}
                         <span class="text-xs text-gray-600 dark:text-white">{{ profile_info.hometown.value }}</span>
                     {% endif %}
-                    {% if friends_count is defined %}
+                    {% if friends_count is defined and (is_owner or friends) %}
                         <span class="text-xs text-gray-600 dark:text-white"><span class="font-medium text-gray-800 dark:text-white">{{ friends_count }}</span> friend{{ 's' if friends_count != 1 else '' }}</span>
                     {% endif %}
                     {% if total_media_count %}

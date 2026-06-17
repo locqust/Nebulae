@@ -148,7 +148,9 @@
             <div class="flex-grow min-w-0 pb-1">
                 <h1 class="text-lg font-bold text-gray-900 dark:text-white truncate">{{ group.name }}</h1>
                 <div class="flex items-center gap-4 mt-1 flex-wrap">
+                    {% if is_group_admin or members %}
                     <span class="text-xs text-gray-600 dark:text-white"><span class="font-medium text-gray-800 dark:text-white">{{ members_count }}</span> member{{ 's' if members_count != 1 else '' }}</span>
+                    {% endif %}
                     {% if group.created_at %}
                         <span class="text-xs text-gray-600 dark:text-white">Created <span class="utc-timestamp" data-timestamp="{{ group.created_at }}">{{ group.created_at | format_timestamp }}</span></span>
                     {% endif %}
