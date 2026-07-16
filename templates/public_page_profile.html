@@ -636,8 +636,13 @@
     </div>
 
     <!-- Modals -->
-	
-	{% include '_create_event_modal.html' %} 
+	{% include '_create_event_modal.html' %}
+    {% include '_life_event_modal.html' %}
+    {% include '_tag_friends_modal.html' %}
+    {% include '_location_modal.html' %}
+    {% include '_tagged_people_modal.html' %}
+    {% include '_poll_modal.html' %}
+    {% include '_feeling_modal.html' %}
 	
     <div id="mediaCarouselModal" class="modal hidden">
         <span class="modal-close media-carousel-close">&times;</span>
@@ -996,19 +1001,13 @@
         });
     </script>    
     
-    {# NEW: Post tagging and location JavaScript #}
     <script src="{{ url_for('static', filename='js/post_tagging.js') }}"></script>
     <script src="{{ url_for('static', filename='js/edit_post_tagging.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/poll.js') }}"></script>
     <script src="{{ url_for('static', filename='js/media_view.js') }}"></script>
     <script src="{{ url_for('static', filename='js/media_view_modal.js') }}"></script>
     
-    
-    {# NEW: Include modals for post tagging and location #}
-    {% include '_tag_friends_modal.html' %}
-    {% include '_location_modal.html' %}
-    {% include '_tagged_people_modal.html' %}
     {% include '_2fa_setup_modal.html' %}
     {% include '_2fa_manage_modal.html' %}
-    {% include '_feeling_modal.html' %}
 </body>
 </html>
