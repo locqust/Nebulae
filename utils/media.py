@@ -30,10 +30,15 @@ def list_media_content(user_media_path, user_uploads_path, subfolder=''):
                         directories.append(item)
                     elif '.' in item and item.rsplit('.', 1)[1].lower() in allowed_extensions:
                         relative_path = os.path.join(subfolder, item)
+                        try:
+                            item_mtime = os.path.getmtime(item_path)
+                        except OSError:
+                            item_mtime = 0
                         media_files.append({
                             'path': relative_path,
                             'source': 'media',  # Tag as from media library
-                            'writable': False
+                            'writable': False,
+                            'mtime': item_mtime
                         })
             except OSError as e:
                 print(f"Error reading media directory {current_dir}: {e}")
@@ -52,14 +57,24 @@ def list_media_content(user_media_path, user_uploads_path, subfolder=''):
                             directories.append(item)
                     elif '.' in item and item.rsplit('.', 1)[1].lower() in allowed_extensions:
                         relative_path = os.path.join(subfolder, item)
+                        try:
+                            item_mtime = os.path.getmtime(item_path)
+                        except OSError:
+                            item_mtime = 0
                         media_files.append({
                             'path': relative_path,
                             'source': 'uploads',  # Tag as from uploads
-                            'writable': True
+                            'writable': True,
+                            'mtime': item_mtime
                         })
             except OSError as e:
                 print(f"Error reading uploads directory {uploads_current_dir}: {e}")
-    
+
+    # Sort newest first, across both media and uploads sources combined,
+    # so photos/videos interleave by actual capture/add time instead of
+    # being grouped by extension or filesystem listing order.
+    media_files.sort(key=lambda f: f['mtime'], reverse=True)
+
     return directories, media_files
 
 def allowed_file(filename):
