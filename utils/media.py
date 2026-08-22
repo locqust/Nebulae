@@ -24,14 +24,14 @@ def list_media_content(user_media_path, user_uploads_path, subfolder=''):
         
         if os.path.exists(current_dir) and os.path.isdir(current_dir):
             try:
-                for item in os.listdir(current_dir):
-                    item_path = os.path.join(current_dir, item)
-                    if os.path.isdir(item_path):
+                for entry in os.scandir(current_dir):
+                    item = entry.name
+                    if entry.is_dir():
                         directories.append(item)
                     elif '.' in item and item.rsplit('.', 1)[1].lower() in allowed_extensions:
                         relative_path = os.path.join(subfolder, item)
                         try:
-                            item_mtime = os.path.getmtime(item_path)
+                            item_mtime = entry.stat().st_mtime
                         except OSError:
                             item_mtime = 0
                         media_files.append({
@@ -50,15 +50,15 @@ def list_media_content(user_media_path, user_uploads_path, subfolder=''):
         
         if os.path.exists(uploads_current_dir) and os.path.isdir(uploads_current_dir):
             try:
-                for item in os.listdir(uploads_current_dir):
-                    item_path = os.path.join(uploads_current_dir, item)
-                    if os.path.isdir(item_path):
+                for entry in os.scandir(uploads_current_dir):
+                    item = entry.name
+                    if entry.is_dir():
                         if item not in directories:  # Avoid duplicates
                             directories.append(item)
                     elif '.' in item and item.rsplit('.', 1)[1].lower() in allowed_extensions:
                         relative_path = os.path.join(subfolder, item)
                         try:
-                            item_mtime = os.path.getmtime(item_path)
+                            item_mtime = entry.stat().st_mtime
                         except OSError:
                             item_mtime = 0
                         media_files.append({

@@ -1282,7 +1282,36 @@ textarea#content {
 .media-item video::-webkit-media-controls-fullscreen-button { display: none !important; }
 .media-item video::--moz-media-controls { display: none !important; }
 .media-item video::-ms-media-controls { display: none !important; }
+
+/* Full-page loading overlay shown while navigating between media browser folders */
+.media-browser-loading-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: var(--bg-primary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    z-index: 2000;
+}
+.media-browser-loading-overlay.hidden {
+    display: none;
+}
+.media-browser-loading-overlay p {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+.media-browser-spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid var(--border-color);
+    border-top-color: var(--primary-color, #3b82f6);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
 /* --- END MEDIA BROWSER STYLES --- */
+
 
 
 /* --- CUSTOM MESSAGE MODAL --- */

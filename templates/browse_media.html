@@ -38,6 +38,12 @@
     </script>
 </head>
 <body class="flex flex-col min-h-screen items-center py-8 px-4">
+    <!-- Shown immediately on folder click, hides the "did it hang?" gap while Flask renders the next folder -->
+    <div id="media-browser-loading-overlay" class="media-browser-loading-overlay hidden">
+        <div class="media-browser-spinner"></div>
+        <p>Loading media…</p>
+    </div>
+
     <div class="max-w-4xl w-full p-8 rounded-lg shadow-xl border main-container">
         <h1 class="text-3xl font-bold text-center mb-6 primary-text">Browse Media</h1>
 
@@ -237,8 +243,21 @@
             if (postCuid) url += (url.includes('?') ? '&' : '?') + 'post_cuid=' + postCuid;
             if (selectedMedia.length > 0) url += (url.includes('?') ? '&' : '?') + 'selected=' + currentSelected;
             
+            showMediaBrowserLoading();
             window.location.href = url;
         }
+
+        function showMediaBrowserLoading() {
+            const overlay = document.getElementById('media-browser-loading-overlay');
+            if (overlay) overlay.classList.remove('hidden');
+        }
+
+        // Safety net: if the browser restores this page from bfcache (e.g. hitting
+        // the back button), make sure a stale overlay isn't left covering the page.
+        window.addEventListener('pageshow', () => {
+            const overlay = document.getElementById('media-browser-loading-overlay');
+            if (overlay) overlay.classList.add('hidden');
+        });
 
         function sendSelectedMediaToParent() {
             const mediaArrayWithObjects = selectedMedia.map(path => ({
