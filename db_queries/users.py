@@ -1,11 +1,14 @@
 # db_queries/users.py
 # Contains functions for managing users.
 
-import hashlib
 import uuid
 import sqlite3
 from datetime import datetime # Import datetime
 from db import get_db
+# SECURITY: password hashing lives in one place now. These three functions used
+# to inline hashlib.sha256() themselves, which meant fixing utils/auth.py alone
+# would have left registration and password resets still writing weak hashes.
+from utils.auth import hash_password
 
 # BUG FIX: Explicitly list all columns to ensure all data is fetched,
 # especially the 'profile_picture_path' and 'original_profile_picture_path'.
@@ -99,7 +102,7 @@ def get_admin_by_username(username):
 def add_user(username, password, display_name, user_type='user'):
     """Adds a new LOCAL user to the database."""
     db = get_db()
-    hashed_password = hashlib.sha256(password.encode()).hexdigest()
+    hashed_password = hash_password(password)
     puid = str(uuid.uuid4())
     try:
         cursor = db.cursor()
@@ -123,7 +126,7 @@ def add_user(username, password, display_name, user_type='user'):
 def update_user_password(username, new_password):
     """Updates a user's password."""
     db = get_db()
-    hashed_password = hashlib.sha256(new_password.encode()).hexdigest()
+    hashed_password = hash_password(new_password)
     cursor = db.cursor()
     cursor.execute("UPDATE users SET password = ? WHERE username = ?", (hashed_password, username))
     db.commit()
@@ -132,7 +135,7 @@ def update_user_password(username, new_password):
 def update_user_password_by_id(user_id, new_password):
     """Updates a user's password by their ID."""
     db = get_db()
-    hashed_password = hashlib.sha256(new_password.encode()).hexdigest()
+    hashed_password = hash_password(new_password)
     cursor = db.cursor()
     cursor.execute("UPDATE users SET password = ? WHERE id = ?", (hashed_password, user_id))
     db.commit()

@@ -3,7 +3,7 @@ import uuid
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadTimeSignature
 from db_queries.users import get_user_by_username, create_user_session, delete_session_by_id, get_user_by_email, update_user_password_by_id
-from utils.auth import check_password, hash_password
+from utils.auth import check_password, hash_password, is_legacy_hash
 from utils.email_utils import send_email
 from utils.password_validation import validate_password, get_password_requirements_text
 
@@ -58,6 +58,13 @@ def login():
             # Fall through to login completion below
             
         elif user and check_password(user['password'], password):
+            # SECURITY: transparently upgrade legacy unsalted SHA-256 hashes.
+            # The plaintext is only available here, at login, so this is the one
+            # place the migration can happen. It runs once per user - after the
+            # rewrite is_legacy_hash() is False and this branch is skipped.
+            if is_legacy_hash(user['password']):
+                update_user_password_by_id(user['id'], password)
+
             # Initial login with valid password
             from db_queries.two_factor import get_2fa_settings
             

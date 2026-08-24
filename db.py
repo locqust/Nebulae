@@ -233,7 +233,8 @@ def init_db(app):
             cursor.execute("SELECT COUNT(*) FROM users WHERE username = ? AND user_type = ?", ('admin', 'admin'))
             if cursor.fetchone()[0] == 0:
                 # Hash the default admin password
-                hashed_password = hashlib.sha256("adminpassword".encode()).hexdigest()
+                from utils.auth import hash_password
+                hashed_password = hash_password("adminpassword")
                 admin_puid = str(uuid.uuid4())
                 # Explicitly set hostname to NULL for local admin and add PUID
                 # Set password_must_change=TRUE to force password change on first login
