@@ -30,8 +30,9 @@ from db_queries.settings import get_user_settings
 
 from utils.auth import hash_password, check_password
 from utils.media import list_media_content, allowed_file, get_media_by_id, update_media_alt_text, serve_user_media_route # Import the route function
+from utils.text_processing import linkify_mentions # NEW: Import the mention linkify function
 from utils.text_processing import linkify_urls # NEW: Import the url linkify function
-from utils.text_processing import linkify_everyone_mention
+from utils.text_processing import linkify_everyone_mention # XSS FIX: replaces the old `| replace()` chain in templates
 from routes.push_notifications import push_notifications_bp
 from routes.parental import parental_bp
 from routes.shortcuts import shortcuts_bp
