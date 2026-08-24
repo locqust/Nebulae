@@ -36,7 +36,7 @@ from routes.parental import parental_bp
 from routes.shortcuts import shortcuts_bp
 
 # Application version
-__version__ = "0.9.5.4-beta"
+__version__ = "0.9.5.5-beta"
 
 app = Flask(__name__)
 Compress(app)
@@ -108,6 +108,35 @@ app.config['COMPRESS_MIN_SIZE'] = 500
 # Persistent session lifetime - keeps PWA/browser sessions alive for 30 days
 from datetime import timedelta
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
+
+# ---------------------------------------------------------------------------
+# Session cookie hardening
+#
+# SameSite=Lax is the important one: it stops other sites making authenticated
+# cross-site POSTs to this node (CSRF), while still allowing top-level GET
+# navigations - which is exactly what the federated ?viewer_token= links use.
+#
+# SESSION_COOKIE_SECURE tells the browser to only send the cookie over HTTPS.
+# It defaults to on, but switches off automatically when the node is running in
+# FEDERATION_INSECURE_MODE (an HTTP test setup). It can also be forced either
+# way with the SESSION_COOKIE_SECURE env var, for LAN-only installs served
+# over plain HTTP.
+# ---------------------------------------------------------------------------
+_secure_cookie_env = os.environ.get('SESSION_COOKIE_SECURE')
+if _secure_cookie_env is not None:
+    _secure_cookies = _secure_cookie_env.lower() in ('true', '1', 't', 'yes')
+else:
+    _secure_cookies = not app.config['FEDERATION_INSECURE_MODE']
+
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SECURE'] = _secure_cookies
+
+print(f"Session cookies: SameSite=Lax, HttpOnly=True, Secure={_secure_cookies}")
+if not _secure_cookies:
+    print("WARNING: Session cookies are not marked Secure. This is expected on an "
+          "HTTP-only test or LAN install, but should NEVER be used on a public "
+          "node. Set SESSION_COOKIE_SECURE=True once HTTPS is in place.")
 
 # Application version
 app.config['APP_VERSION'] = __version__
@@ -756,11 +785,17 @@ def offline():
 app.add_url_rule('/media/<puid>/<path:filename>', 'serve_user_media', serve_user_media_route)
 
 @app.after_request
-def add_cache_headers(response):
-    """Add cache headers for static files"""
+def add_response_headers(response):
+    """Cache headers for static files, plus baseline security headers."""
     if request.path.startswith('/static/'):
         # Cache static files for 1 week
         response.headers['Cache-Control'] = 'public, max-age=604800'
+
+    # Baseline security headers. setdefault() means any route that has
+    # deliberately set its own value keeps it.
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
     return response
 
 if __name__ == '__main__':

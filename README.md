@@ -108,8 +108,6 @@ Nebulae uses a federated architecture where multiple independent nodes can conne
 - ✅ End-to-end HTTPS for all federation
 - ✅ HMAC-SHA256 request signing
 - ✅ Password hashing with werkzeug.security
-- ✅ CSRF protection on all forms
-- ✅ Content Security Policy headers
 - ✅ Session management with secure tokens
 - ✅ Media path isolation
 
