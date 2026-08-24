@@ -107,7 +107,7 @@
                     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                         {% for media_file_path in media_files %}
                             {# PUID FIX: Use the current_user_puid passed from the route #}
-                            {% set full_media_url = url_for('serve_user_media', puid=current_user_puid, filename=media_file_path) %}
+                            {% set full_media_url = url_for('main.serve_user_media', puid=current_user_puid, filename=media_file_path) %}
                             {% set media_type = 'image' if media_file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')) else ('video' if media_file_path.lower().endswith(('.mp4', '.mov', '.webm', '.avi', '.mkv')) else 'other') %}
 
                             {# Conditionally render media item based on mode #}
