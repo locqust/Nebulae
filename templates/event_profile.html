@@ -259,7 +259,7 @@
                                 <span class="font-semibold secondary-text">Where:</span>
                                 <div class="mt-1">
                                     {% if event.location and ('zoom' in event.location|lower or 'teams' in event.location|lower or 'http' in event.location|lower) %}
-                                        <p class="whitespace-pre-wrap secondary-text">{{ event.location | linkify_urls | safe }}</p>
+                                        <p class="whitespace-pre-wrap secondary-text">{{ event.location | linkify_urls }}</p>
                                     {% else %}
                                         <a href="https://www.google.com/maps/search/{{ event.location | urlencode }}" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline whitespace-pre-wrap">{{ event.location }}</a>
                                     {% endif %}
@@ -276,7 +276,7 @@
                             <div class="flex-grow">
                                 <span class="font-semibold secondary-text">Description:</span>
                                 <div class="mt-1 secondary-text">
-                                    <p class="whitespace-pre-wrap">{{ event.details | linkify_mentions | linkify_urls | safe }}</p>
+                                    <p class="whitespace-pre-wrap">{{ event.details | linkify_mentions | linkify_urls | linkify_everyone_mention('event') }}</p>
                                 </div>
                             </div>
                         </div>

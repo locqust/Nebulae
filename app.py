@@ -13,6 +13,7 @@ import re
 import traceback
 import sys
 from itsdangerous import URLSafeTimedSerializer
+from markupsafe import Markup, escape
 from flask_compress import Compress
 from routes.conversations import conversations_bp
 
@@ -29,14 +30,14 @@ from db_queries.settings import get_user_settings
 
 from utils.auth import hash_password, check_password
 from utils.media import list_media_content, allowed_file, get_media_by_id, update_media_alt_text, serve_user_media_route # Import the route function
-from utils.text_processing import linkify_mentions # NEW: Import the mention linkify function
 from utils.text_processing import linkify_urls # NEW: Import the url linkify function
+from utils.text_processing import linkify_everyone_mention
 from routes.push_notifications import push_notifications_bp
 from routes.parental import parental_bp
 from routes.shortcuts import shortcuts_bp
 
 # Application version
-__version__ = "0.9.5.5-beta"
+__version__ = "0.9.5.6-beta"
 
 app = Flask(__name__)
 Compress(app)
@@ -717,16 +718,20 @@ def format_event_datetime_filter(start_dt, end_dt=None):
 # NEW: Filter to linkify locations
 def linkify_location_filter(location):
     if not location:
-        return ""
-    # Simple check if it contains numbers, suggesting an address
+        return Markup("")
     if re.search(r'\d', location) and not location.lower().startswith(('http', 'www')):
-        return f'<a href="https://www.google.com/maps/search/?api=1&query={quote(location)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">{location}</a>'
-    return linkify_urls(location) # Use existing URL linkify for things like Zoom links
+        return Markup(
+            f'<a href="https://www.google.com/maps/search/?api=1&query={quote(location)}" '
+            f'target="_blank" rel="noopener noreferrer" '
+            f'class="text-blue-600 dark:text-blue-400 hover:underline">{escape(location)}</a>'
+        )
+    return linkify_urls(location)
 
 
 app.jinja_env.filters['js_string'] = js_string_filter
 app.jinja_env.filters['linkify_mentions'] = linkify_mentions
 app.jinja_env.filters['linkify_urls'] = linkify_urls
+app.jinja_env.filters['linkify_everyone_mention'] = linkify_everyone_mention
 app.jinja_env.filters['format_date'] = format_date_filter
 app.jinja_env.filters['format_full_date'] = format_full_date_filter
 app.jinja_env.filters['format_timestamp'] = format_timestamp_filter

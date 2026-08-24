@@ -163,12 +163,11 @@
     
     {# Content section - now OUTSIDE the header flex container, matching post layout #}
     {# Process comment content with @everyone styling for group/event contexts #}
-    {% if is_group_context or is_event_context %}
-        {% set processed_content = comment.content | linkify_mentions | linkify_urls %}
-        <p class="primary-text whitespace-pre-wrap text-sm">{{ processed_content | replace('@everyone', '<span class="font-bold text-orange-600 dark:text-orange-400">@everyone</span>') | replace('@all', '<span class="font-bold text-orange-600 dark:text-orange-400">@all</span>') | safe }}</p>
-    {% else %}
-        <p class="primary-text whitespace-pre-wrap text-sm">{{ comment.content | linkify_mentions | linkify_urls | safe }}</p>
-    {% endif %}
+    {# XSS FIX: linkify_* filters escape their input and return Markup, so no `| safe`. #}
+    {# @everyone styling now goes through linkify_everyone_mention - the old `| replace()` #}
+    {# chain silently breaks against Markup input (Jinja's replace escapes its arguments). #}
+    {% set everyone_context = 'event' if is_event_context else ('group' if is_group_context else none) %}
+    <p class="primary-text whitespace-pre-wrap text-sm">{{ comment.content | linkify_mentions | linkify_urls | linkify_everyone_mention(everyone_context) }}</p>
 
     <!-- Comment Media Display -->
     {% if comment.media_files %}

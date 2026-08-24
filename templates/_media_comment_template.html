@@ -26,7 +26,7 @@
             <a href="{{ federated_user_profile_url(comment) }}" class="name-link">{{ comment.display_name or comment.username }}</a>
             <span class="text-gray-500 dark:text-gray-400 text-xs ml-2"><span class="utc-timestamp" data-timestamp="{{ comment.timestamp }}">{{ comment.timestamp | format_timestamp }}</span></span>
         </p>
-        <p class="primary-text whitespace-pre-wrap text-sm mt-1">{{ comment.content | linkify_mentions | linkify_urls | safe }}</p>
+        <p class="primary-text whitespace-pre-wrap text-sm mt-1">{{ comment.content | linkify_mentions | linkify_urls }}</p>
 
         <!-- Comment Media Display -->
         {% if comment.media_files %}
@@ -40,7 +40,7 @@
                             data-alt-text="{{ media_file_data.alt_text | default('') }}"
                             data-username="{{ comment.username }}"
                             data-puid="{{ comment.puid }}"
-                            data-comment-id="{{ comment.id }}">>
+                            data-comment-id="{{ comment.id }}" >
                             {% if media_file_data.media_file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')) %}
                                 {# Use thumbnails for all images #}
                                 {% set media_url = federated_media_url(comment, media_file_data.media_file_path) %}

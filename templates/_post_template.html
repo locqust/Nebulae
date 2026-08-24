@@ -408,12 +408,9 @@
         </div>
     {% else %}
         {# Process content with @everyone styling for group/event posts #}
-        {% if original_post.group or original_post.event %}
-            {% set processed_content = original_post.content | default('', true) | linkify_mentions | linkify_urls %}
-            <p class="primary-text whitespace-pre-wrap">{{ processed_content | replace('@everyone', '<span class="font-bold text-orange-600 dark:text-orange-400">@everyone</span>') | replace('@all', '<span class="font-bold text-orange-600 dark:text-orange-400">@all</span>') | safe }}</p>
-        {% else %}
-            <p class="primary-text whitespace-pre-wrap">{{ original_post.content | default('', true) | linkify_mentions | linkify_urls | safe }}</p>
-        {% endif %}
+        {# XSS FIX: linkify_* filters escape their input and return Markup, so no `| safe`. #}
+        {% set everyone_context = 'event' if original_post.event else ('group' if original_post.group else none) %}
+        <p class="primary-text whitespace-pre-wrap">{{ original_post.content | default('', true) | linkify_mentions | linkify_urls | linkify_everyone_mention(everyone_context) }}</p>
     {% endif %}
 
     {# NEW: Poll Display #}

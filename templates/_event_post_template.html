@@ -220,8 +220,8 @@
         </div>
     {% else %}
         {# Event posts always process @everyone styling #}
-        {% set processed_content = post.content | default('', true) | linkify_mentions | linkify_urls %}
-        <p class="primary-text whitespace-pre-wrap">{{ processed_content | replace('@everyone', '<span class="font-bold text-orange-600 dark:text-orange-400">@everyone</span>') | replace('@all', '<span class="font-bold text-orange-600 dark:text-orange-400">@all</span>') | safe }}</p>
+        {# XSS FIX: linkify_* filters escape their input and return Markup, so no `| safe`. #}
+        <p class="primary-text whitespace-pre-wrap">{{ post.content | default('', true) | linkify_mentions | linkify_urls | linkify_everyone_mention('event') }}</p>
     {% endif %}
 
     {% if post.media_files %}
