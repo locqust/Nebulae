@@ -2,7 +2,6 @@
 # Contains the core database connection, initialization, and closing logic.
 
 import sqlite3
-import hashlib
 import uuid
 import os
 import time

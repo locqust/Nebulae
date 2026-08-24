@@ -3201,58 +3201,81 @@ def serve_event_picture(filename):
     return send_from_directory(event_pics_dir, filename)
 
 
+def _resolve_within(base, *parts):
+    """
+    Join *parts onto base and confirm the result is still inside base.
+
+    SECURITY: send_from_directory() sanitises its *filename* argument, but NOT
+    its *directory* argument. Any code path that builds a directory out of user
+    input must be checked here, or an attacker can walk out of the media roots
+    with '../' and read arbitrary files (the database, /etc/passwd, ...).
+
+    realpath() is used so symlinks can't be used to hop out, and commonpath()
+    rather than startswith() because '/app/user_media_backup'.startswith(
+    '/app/user_media') is True - a classic prefix bug.
+
+    Returns the resolved absolute directory, or aborts with 400.
+    """
+    base = os.path.realpath(base)
+    target = os.path.realpath(os.path.join(base, *[p for p in parts if p]))
+    if os.path.commonpath([base, target]) != base:
+        abort(400, "Invalid media path.")
+    return target
+
+
 @main_bp.route('/media/<puid>/<path:filename>')
 def serve_user_media(puid, filename):
     """
     Serves a media file for a given user PUID.
     Checks uploads path first (writable), then media path (read-only).
+
+    NOTE: this route is intentionally unauthenticated - remote nodes fetch
+    media directly over federation. Access control is by unguessable PUID +
+    path, so the traversal guards below are what keep it honest.
     """
     user = get_user_by_puid(puid)
     if not user:
         abort(404, "User not found.")
 
     decoded_filename = os.path.normpath(filename)
-    
+    base_filename = os.path.basename(decoded_filename)
+    subfolder_path = os.path.dirname(decoded_filename)
+
+    # Reject anything that still looks like traversal after normalisation,
+    # before it is used to build a path at all.
+    if not base_filename or base_filename in ('.', '..'):
+        abort(400, "Invalid media path.")
+
     # Check if it's a profile picture
     if decoded_filename.startswith('profile.'):
-        directory = os.path.join(current_app.config['PROFILE_PICTURE_STORAGE_DIR'], user['puid'])
-        base_filename = decoded_filename
+        directory = _resolve_within(
+            current_app.config['PROFILE_PICTURE_STORAGE_DIR'], user['puid']
+        )
     else:
-        # NEW: Check uploads_path first (writable location)
+        # Check uploads_path first (writable location)
         if user.get('uploads_path'):
-            uploads_dir = os.path.join(current_app.config['USER_UPLOADS_BASE_DIR'], user['uploads_path'])
-            subfolder_path = os.path.dirname(decoded_filename)
-            if subfolder_path:
-                uploads_dir = os.path.join(uploads_dir, subfolder_path)
-            
-            base_filename = os.path.basename(decoded_filename)
-            uploads_file_path = os.path.join(uploads_dir, base_filename)
-            
-            if os.path.exists(uploads_file_path):
+            # SECURITY FIX: this branch used to return before the path check
+            # below ever ran, so the check applied only to the media path.
+            uploads_dir = _resolve_within(
+                current_app.config['USER_UPLOADS_BASE_DIR'],
+                user['uploads_path'],
+                subfolder_path
+            )
+            if os.path.isfile(os.path.join(uploads_dir, base_filename)):
                 # File found in uploads, serve it
                 return send_from_directory(uploads_dir, base_filename, as_attachment=False)
-        
+
         # Fall back to read-only media path
         if not user.get('media_path'):
             abort(404, "User does not have a configured media path.")
-        
-        directory = os.path.join(current_app.config['USER_MEDIA_BASE_DIR'], user['media_path'])
-        subfolder_path = os.path.dirname(decoded_filename)
-        if subfolder_path:
-            directory = os.path.join(directory, subfolder_path)
-        base_filename = os.path.basename(decoded_filename)
 
-    # Security check
-    valid_bases = [
-        current_app.config['USER_MEDIA_BASE_DIR'],
-        current_app.config['USER_UPLOADS_BASE_DIR'],
-        current_app.config['PROFILE_PICTURE_STORAGE_DIR']
-    ]
-    
-    if not any(os.path.abspath(directory).startswith(os.path.abspath(base)) for base in valid_bases):
-        abort(400, "Invalid media path.")
+        directory = _resolve_within(
+            current_app.config['USER_MEDIA_BASE_DIR'],
+            user['media_path'],
+            subfolder_path
+        )
 
-    if not os.path.exists(os.path.join(directory, base_filename)):
+    if not os.path.isfile(os.path.join(directory, base_filename)):
         abort(404, "File not found.")
 
     return send_from_directory(directory, base_filename, as_attachment=False)

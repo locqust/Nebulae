@@ -8,7 +8,7 @@
 [![Python](https://img.shields.io/badge/Python-3.9+-3776AB?logo=python&logoColor=white)](https://www.python.org)
 
 Remember when social media was about connecting with friends, not algorithms and ads? In the late 00's, early 10's? Yeah me too. It annoys me when I scroll through my Facebook feed and its all 'sponsored' posts, 'follow suggestions', outright adverts. I can scroll for a good minute or two before I see a post from someone (or a group) I actually know. And then I find the post was 6 days ago! Let's face it, mainstream social media now is all about keeping you locked to that screen constantly feeding you suggestions, or tweaking what it shows you because you briefly paused from scrolling near a random advert you don't care about and now it thinks thats what you want to see more of! 
-Nebulae attempts brings back that social media experience of before with modern privacy standards and using a decentralized federation method. Why decentralised? So YOU control your data. 
+Nebulae attempts to bring back that social media experience of before with modern privacy standards and using a decentralised federation method. Why decentralised? So YOU control your data. 
 
 
 ## **What is Nebulae?**
@@ -30,7 +30,7 @@ Nebulae is a federated social networking platform designed as an alternative to 
 ## **Features**
 ### **Core Social Features**
 
-- Chronological Feed: Posts appear in time order. No mysterious algorithms ditacting what you should see.
+- Chronological Feed: Posts appear in time order. No mysterious algorithms dictating what you should see.
 - User Profiles: You, just you. Profiles with media galleries, albums, your posts and posts made on your timeline by friends.
 - Public page profiles: Own a business? A charity? Actually a fairly famous person? Then create a public facing page where people can follow you and get all the latest updates.
 - Discover Friends: Connect with people across both your local and connected nodes.
@@ -58,7 +58,7 @@ Nebulae is a federated social networking platform designed as an alternative to 
 - Or host on a Linux server direct. (Windows install coming soon)
 - Media Path Linking: Connect existing photo libraries without duplication, media folders are read-only. Except a dedicated uploaded media folder where you can upload direct from your device.
 - HMAC Authentication: Secure node-to-node communication.
-- Targeted subscriptions: Node connections can either be a full node connection where admins share keys. Allowing you see all users, groups and pages on that node. Or a Targeted Subcription, where upon joining a group or following a page/event. A node connection is established for just THAT purpose. These can be upgraded later to a full connection. 
+- Targeted subscriptions: Node connections can either be a full node connection where admins share keys. Allowing you see all users, groups and pages on that node. Or a Targeted Subscription, where upon joining a group or following a page/event. A node connection is established for just THAT purpose. These can be upgraded later to a full connection. 
 
 ### **Modern Features**
 
@@ -110,6 +110,10 @@ Nebulae uses a federated architecture where multiple independent nodes can conne
 - ✅ Password hashing with werkzeug.security
 - ✅ Session management with secure tokens
 - ✅ Media path isolation
+- ✅ scrypt password hashing (salted, memory-hard)
+- ✅ Two-factor authentication (TOTP) with backup codes
+- ✅ Security headers (nosniff, frame protection, referrer policy)
+- ✅ SameSite session cookies
 
 ### **What We Don't Do**
 

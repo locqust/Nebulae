@@ -1,9 +1,8 @@
 # utils/media.py
 import os
-from flask import current_app, send_from_directory, abort
+from flask import current_app
 from werkzeug.utils import secure_filename
 from db import get_db
-from db_queries.users import get_user_by_puid
 # Unused imports removed to help break circular dependency
 # from db_queries.comments import get_comment_by_id
 # from db_queries.posts import get_post_by_id
@@ -122,57 +121,3 @@ def update_media_alt_text(media_id, alt_text):
         return True
         
     return False
-
-def serve_user_media_route(puid, filename):
-    """
-    Serves a media file for a given user PUID.
-    Checks uploads path first, then media path.
-    """
-    user = get_user_by_puid(puid)
-    if not user:
-        abort(404, "User not found.")
-
-    decoded_filename = os.path.normpath(filename)
-    
-    # Check if it's a profile picture
-    if decoded_filename.startswith('profile.'):
-        directory = os.path.join(current_app.config['PROFILE_PICTURE_STORAGE_DIR'], user['puid'])
-        base_filename = decoded_filename
-    else:
-        # NEW: Check uploads path first (writable location)
-        if user.get('uploads_path'):
-            uploads_dir = os.path.join(current_app.config['USER_UPLOADS_BASE_DIR'], user['uploads_path'])
-            subfolder_path = os.path.dirname(decoded_filename)
-            if subfolder_path:
-                uploads_dir = os.path.join(uploads_dir, subfolder_path)
-            
-            base_filename = os.path.basename(decoded_filename)
-            uploads_file_path = os.path.join(uploads_dir, base_filename)
-            
-            if os.path.exists(uploads_file_path):
-                return send_from_directory(uploads_dir, base_filename, as_attachment=False)
-        
-        # Fall back to read-only media path
-        if not user.get('media_path'):
-            abort(404, "User does not have a configured media path.")
-        
-        directory = os.path.join(current_app.config['USER_MEDIA_BASE_DIR'], user['media_path'])
-        subfolder_path = os.path.dirname(decoded_filename)
-        if subfolder_path:
-            directory = os.path.join(directory, subfolder_path)
-        base_filename = os.path.basename(decoded_filename)
-
-    # Security check
-    valid_bases = [
-        current_app.config['USER_MEDIA_BASE_DIR'],
-        current_app.config['USER_UPLOADS_BASE_DIR'],
-        current_app.config['PROFILE_PICTURE_STORAGE_DIR']
-    ]
-    
-    if not any(os.path.abspath(directory).startswith(os.path.abspath(base)) for base in valid_bases):
-        abort(400, "Invalid media path.")
-
-    if not os.path.exists(os.path.join(directory, base_filename)):
-        abort(404, "File not found.")
-
-    return send_from_directory(directory, base_filename, as_attachment=False)

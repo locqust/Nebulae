@@ -29,7 +29,7 @@ from db_queries.federation import get_node_by_hostname, get_node_nu_id
 from db_queries.settings import get_user_settings
 
 from utils.auth import hash_password, check_password
-from utils.media import list_media_content, allowed_file, get_media_by_id, update_media_alt_text, serve_user_media_route # Import the route function
+from utils.media import list_media_content, allowed_file, get_media_by_id, update_media_alt_text
 from utils.text_processing import linkify_mentions # NEW: Import the mention linkify function
 from utils.text_processing import linkify_urls # NEW: Import the url linkify function
 from utils.text_processing import linkify_everyone_mention # XSS FIX: replaces the old `| replace()` chain in templates
@@ -38,7 +38,7 @@ from routes.parental import parental_bp
 from routes.shortcuts import shortcuts_bp
 
 # Application version
-__version__ = "0.9.5.7-beta"
+__version__ = "0.9.5.8-beta"
 
 app = Flask(__name__)
 Compress(app)
@@ -787,8 +787,6 @@ app.register_blueprint(conversations_bp, url_prefix='/conversations')
 def offline():
     """Offline fallback page for PWA"""
     return render_template('offline.html')
-
-app.add_url_rule('/media/<puid>/<path:filename>', 'serve_user_media', serve_user_media_route)
 
 @app.after_request
 def add_response_headers(response):
