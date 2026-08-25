@@ -38,7 +38,7 @@ from routes.parental import parental_bp
 from routes.shortcuts import shortcuts_bp
 
 # Application version
-__version__ = "0.9.6.0-beta"
+__version__ = "0.9.6.1-beta"
 
 app = Flask(__name__)
 Compress(app)
