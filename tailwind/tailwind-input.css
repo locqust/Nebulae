@@ -1,0 +1,6 @@
+/* Source file for the Tailwind build. Not served directly.
+   Build with: ./scripts/build-css.sh
+   Output:     static/css/tailwind.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

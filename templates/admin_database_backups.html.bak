@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#3b82f6" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#1e3a8a" media="(prefers-color-scheme: dark)">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Nebulae">
+    
+    <!-- PWA Icons -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192x192.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192x192.png') }}">
+    <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='icons/icon-512x512.png') }}">
+    <title>Database Backups - Admin</title>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+
+    <!-- Preload critical CSS -->
+    <link rel="preload" href="{{ url_for('static', filename='css/style.css') }}" as="style">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="flex flex-col min-h-screen items-center justify-center py-8 px-4 bg-cover bg-center bg-no-repeat bg-fixed backdrop-blur-sm" style="background-image: url('{{ url_for('static', filename='images/branding/background_1920x1080.png') }}');">
+    <!-- Dark overlay for better readability -->
+    <div class="fixed inset-0 bg-black/30 -z-10"></div>
+    <!-- Toast Container (required for notifications) -->
+    <div id="toast-container"></div>
+    <div class="max-w-6xl w-full bg-white p-8 rounded-lg shadow-xl border border-gray-200">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">Database Backups</h1>
+            <a href="{{ url_for('admin.admin_dashboard') }}" 
+               class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-300">
+                Back to Dashboard
+            </a>
+        </div>
+
+        <!-- Backup Schedule Settings Section -->
+        <div class="mb-8 p-6 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-200">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Scheduled Backup Settings
+            </h2>
+            
+            <form action="{{ url_for('admin.save_backup_settings') }}" method="POST">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                    <!-- Enable/Disable -->
+                    <div>
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                            <input type="checkbox" name="backup_enabled" 
+                                   {% if settings.get('backup_enabled', 'False').lower() == 'true' %}checked{% endif %}
+                                   class="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500">
+                            <span class="font-semibold text-gray-700">Enable Scheduled Backups</span>
+                        </label>
+                    </div>
+                    
+                    <!-- Frequency -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Backup Frequency</label>
+                        <select name="backup_frequency" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500">
+                            <option value="daily" {% if settings.get('backup_frequency') == 'daily' %}selected{% endif %}>Daily</option>
+                            <option value="weekly" {% if settings.get('backup_frequency') == 'weekly' %}selected{% endif %}>Weekly</option>
+                            <option value="monthly" {% if settings.get('backup_frequency') == 'monthly' %}selected{% endif %}>Monthly</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Time -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Backup Time</label>
+                        <input type="time" name="backup_time" 
+                               value="{{ settings.get('backup_time', '02:00') }}"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500">
+                        <p class="text-xs text-gray-500 mt-1">24-hour format</p>
+                    </div>
+                    
+                    <!-- Retention -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Retention (Days)</label>
+                        <input type="number" name="backup_retention_days" 
+                               value="{{ settings.get('backup_retention_days', '30') }}"
+                               min="1" max="365"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <div class="text-sm text-gray-600">
+                        {% if settings.get('backup_last_run') %}
+                            Last scheduled backup: {{ settings.get('backup_last_run') }}
+                        {% else %}
+                            No scheduled backups have run yet.
+                        {% endif %}
+                    </div>
+                    <div class="flex gap-2">
+                        <form action="{{ url_for('admin.cleanup_old_backups') }}" method="POST" class="inline">
+                            <button type="submit" 
+                                    class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-300">
+                                Cleanup Old Backups
+                            </button>
+                        </form>
+                        <button type="submit" 
+                                class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-300">
+                            Save Settings
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Create Ad-hoc Backup Section -->
+        <div class="mb-8 p-6 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                Create Backup Now
+            </h2>
+            
+            <form action="{{ url_for('admin.create_database_backup') }}" method="POST" class="flex gap-3">
+                <div class="flex-1">
+                    <input type="text" name="backup_name" 
+                           placeholder="Optional: Enter backup name (e.g., 'before_upgrade')"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-green-500 focus:border-green-500">
+                    <p class="text-xs text-gray-500 mt-1">Leave blank for automatic timestamped name</p>
+                </div>
+                <button type="submit" 
+                        class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg transition duration-300 whitespace-nowrap">
+                    Create Backup
+                </button>
+            </form>
+        </div>
+
+        <!-- Available Backups Section -->
+        <div class="mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center justify-between">
+                <span class="flex items-center gap-2">
+                    <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
+                    </svg>
+                    Available Backups ({{ backups|length }})
+                </span>
+            </h2>
+            
+            {% if backups %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+                        <thead>
+                            <tr class="bg-gray-100 text-gray-700 uppercase text-sm leading-normal">
+                                <th class="py-3 px-6 text-left">Backup Name</th>
+                                <th class="py-3 px-6 text-left">Type</th>
+                                <th class="py-3 px-6 text-left">Created</th>
+                                <th class="py-3 px-6 text-left">Size</th>
+                                <th class="py-3 px-6 text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-gray-600 text-sm font-light">
+                            {% for backup in backups %}
+                            <tr class="border-b border-gray-200 hover:bg-gray-50">
+                                <td class="py-3 px-6 text-left">
+                                    <code class="bg-gray-100 px-2 py-1 rounded text-xs">{{ backup.filename }}</code>
+                                </td>
+                                <td class="py-3 px-6 text-left">
+                                    {% if backup.is_scheduled %}
+                                        <span class="bg-blue-100 text-blue-800 py-1 px-2 rounded text-xs">Scheduled</span>
+                                    {% else %}
+                                        <span class="bg-purple-100 text-purple-800 py-1 px-2 rounded text-xs">Manual</span>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3 px-6 text-left">
+                                    {{ backup.created.strftime('%Y-%m-%d %H:%M:%S') }}
+                                </td>
+                                <td class="py-3 px-6 text-left">
+                                    {{ backup.size_formatted }}
+                                </td>
+                                <td class="py-3 px-6 text-center">
+                                    <div class="flex items-center justify-center gap-2">
+                                        <button onclick="showRestoreConfirmation('{{ backup.filename }}')" 
+                                                class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-3 rounded text-xs transition duration-300">
+                                            Restore
+                                        </button>
+                                        <button type="button" 
+                                                onclick="showDeleteConfirmation('{{ backup.filename }}')"
+                                                class="bg-red-500 hover:bg-red-600 text-white font-semibold py-1 px-3 rounded text-xs transition duration-300">
+                                            Delete
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
+                    <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+                    </svg>
+                    <p class="text-lg font-semibold text-gray-700 mb-2">No Backups Found</p>
+                    <p class="text-gray-500">Create your first backup using the form above.</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Important Notes Section -->
+        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-yellow-800">Important Notes</h3>
+                    <div class="mt-2 text-sm text-yellow-700">
+                        <ul class="list-disc list-inside space-y-1">
+                            <li><strong>Restore operations will log you out</strong> - You'll need to log in again after restoring</li>
+                            <li><strong>Automatic pre-restore backup</strong> - A backup of the current database is created before any restore</li>
+                            <li><strong>Scheduled backups are automatic</strong> - They run in the background based on your settings</li>
+                            <li><strong>Cleanup only affects scheduled backups</strong> - Manual backups are never auto-deleted</li>
+                            <li><strong>Store backups externally</strong> - Consider copying important backups outside the container</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Restore Confirmation Modal -->
+    <div id="restoreModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="p-6">
+                <div class="flex items-start mb-4">
+                    <div class="flex-shrink-0">
+                        <svg class="h-12 w-12 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-bold text-gray-900 mb-2">Confirm Database Restore</h3>
+                        <p class="text-sm text-gray-600 mb-3">
+                            You are about to restore the database from backup:
+                        </p>
+                        <p class="text-sm font-mono bg-gray-100 p-2 rounded mb-3" id="restoreFilename"></p>
+                        <div class="bg-red-50 border-l-4 border-red-400 p-3 mb-3">
+                            <p class="text-sm text-red-700 font-semibold">⚠️ This action cannot be undone!</p>
+                            <ul class="text-xs text-red-600 mt-2 space-y-1">
+                                <li>• All current data will be replaced</li>
+                                <li>• You will be logged out immediately</li>
+                                <li>• A pre-restore backup will be created automatically</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <form id="restoreForm" method="POST" action="">
+                    <input type="hidden" name="confirmed" value="true">
+                    <div class="flex justify-end gap-3">
+                        <button type="button" onclick="closeModal('restoreModal')" 
+                                class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded transition duration-300">
+                            Cancel
+                        </button>
+                        <button type="submit" 
+                                class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded transition duration-300">
+                            Yes, Restore Database
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="p-6">
+                <div class="flex items-start mb-4">
+                    <div class="flex-shrink-0">
+                        <svg class="h-12 w-12 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-bold text-gray-900 mb-2">Delete Backup?</h3>
+                        <p class="text-sm text-gray-600 mb-3">
+                            Are you sure you want to delete this backup?
+                        </p>
+                        <p class="text-sm font-mono bg-gray-100 p-2 rounded mb-3" id="deleteFilename"></p>
+                        <p class="text-xs text-gray-500">This action cannot be undone.</p>
+                    </div>
+                </div>
+                
+                <form id="deleteForm" method="POST" action="">
+                    <div class="flex justify-end gap-3">
+                        <button type="button" onclick="closeModal('deleteModal')" 
+                                class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded transition duration-300">
+                            Cancel
+                        </button>
+                        <button type="submit" 
+                                class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded transition duration-300">
+                            Yes, Delete Backup
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include script.js for modal functions -->
+    <script>
+        // Configure for non-SPA page
+        window.appConfig = {
+            isSpaPage: false,
+            isCurrentUserAdmin: true
+        };
+    </script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+        <!-- PWA Support -->
+    <script src="{{ url_for('static', filename='js/pwa.js') }}"></script>
+    <script>
+        // Convert Flask flash messages to toasts
+        document.addEventListener('DOMContentLoaded', () => {
+            const flashMessages = {{ get_flashed_messages(with_categories=true) | tojson | safe }};
+            
+            if (flashMessages && flashMessages.length > 0) {
+                // Wait for toast system to be initialized
+                setTimeout(() => {
+                    flashMessages.forEach(([category, message]) => {
+                        const typeMap = {
+                            'success': 'success',
+                            'error': 'error',
+                            'danger': 'error',
+                            'warning': 'warning',
+                            'info': 'info',
+                            'message': 'info'
+                        };
+                        
+                        const toastType = typeMap[category] || 'info';
+                        
+                        if (App.Toast && typeof App.Toast.show === 'function') {
+                            App.Toast.show(message, toastType);
+                        }
+                    });
+                }, 100); // Small delay to ensure Toast is loaded
+            }
+        });
+    </script>
+    <script>
+        // Initialize the app
+        App.initCore();
+        
+        function showRestoreConfirmation(filename) {
+            document.getElementById('restoreFilename').textContent = filename;
+            document.getElementById('restoreForm').action = `/admin/backup/restore/${filename}`;
+            openModal('restoreModal');
+        }
+        
+        function showDeleteConfirmation(filename) {
+            document.getElementById('deleteFilename').textContent = filename;
+            document.getElementById('deleteForm').action = `/admin/backup/delete/${filename}`;
+            openModal('deleteModal');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#3b82f6" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#1e3a8a" media="(prefers-color-scheme: dark)">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Nebulae">
+    
+    <!-- PWA Icons -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192x192.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192x192.png') }}">
+    <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='icons/icon-512x512.png') }}">
+    <title>Parental Controls - Nebulae</title>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+
+    <!-- Preload critical CSS -->
+    <link rel="preload" href="{{ url_for('static', filename='css/style.css') }}" as="style">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class'
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        html {
+            font-size: {{ user_settings.text_size | default(100) }}%;
+        }
+    </style>
+    <script>
+        (function() {
+            const theme = "{{ user_settings.theme | default('light') }}";
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+    </script>
+</head>
+<body class="min-h-screen">
+    <!-- Page Loader -->
+    <div id="pageLoader" class="page-loader" style="display: flex;">
+        <div class="loader-spinner"></div>
+    </div>
+
+    {% include '_header.html' %}
+
+    <!-- Mobile Sidebar Toggle Button -->
+    <button id="mobile-sidebar-toggle" type="button" aria-label="Toggle sidebar">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+        </svg>
+    </button>
+    
+    <!-- Sidebar Overlay for Mobile -->
+    <div id="sidebar-overlay"></div>
+
+    <!-- NEW: Main Content Grid -->
+    <div class="page-container">       
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- NEW: Left Sidebar (Profile Info) -->
+            <aside class="lg:col-span-3 space-y-6">
+                <div class="profile-sidebar custom-scrollbar space-y-6">
+                    
+                    <!-- Profile Picture Card -->
+                    <div class="p-6 rounded-lg shadow-sm border post-card">
+                        <div class="flex flex-col items-center">
+                            <div class="w-60 h-60 rounded-full overflow-hidden border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center bg-gray-200 dark:bg-gray-700">
+                                {% if current_user_profile and current_user_profile.profile_picture_path %}
+                                    <img id="profile-picture-display"
+                                         src="{{ url_for('main.serve_profile_picture', filename=current_user_profile.profile_picture_path) }}"
+                                         alt="Profile Picture"
+                                         class="w-full h-full object-cover {% if current_user_profile.original_profile_picture_path %}cursor-pointer{% endif %}"
+                                         data-original-profile-path="{{ current_user_profile.original_profile_picture_path | default('') | e }}"
+                                         data-profile-puid="{{ current_user_puid | e }}"
+                                         data-muid="{{ current_user_profile.profile_picture_muid | default('') | e }}"
+                                         data-username="{{ username | e }}"
+                                         {% if current_user_profile.original_profile_picture_path %}
+                                             onclick="openProfilePictureCarouselFromProfile(this)"
+                                         {% endif %}>
+                                {% else %}
+                                    <svg id="profile-picture-display-placeholder" class="w-20 h-20 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                                    </svg>
+                                {% endif %}
+                            </div>
+
+                            <!-- NEW: User display name and username -->
+                            <div class="text-center mt-4">
+                                <h2 class="text-xl font-bold text-gray-900 dark:text-white">{{ current_user_profile.display_name or username }}</h2>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">@{{ username }}</p>
+                            </div>
+
+                            <!-- {% if is_owner and not session.get('is_admin') %}
+                                <div class="mt-4 text-center flex flex-col gap-4 justify-center w-full">
+                                    <form id="profilePictureUploadForm" action="{{ url_for('main.upload_profile_picture') }}" method="POST" enctype="multipart/form-data" class="flex flex-col items-center gap-2 w-full">
+                                        <label for="profile_picture_file_input" class="w-full text-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-sm font-medium secondary-text py-2 px-3 rounded-lg cursor-pointer">
+                                            Choose File...
+                                            <input type="file" name="profile_picture_file_input" id="profile_picture_file_input" accept="image/png, image/jpeg, image/gif" class="hidden">
+                                        </label>
+                                        <button type="button" id="openCropperButton" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition duration-300 ease-in-out" disabled>
+                                            Adjust & Upload
+                                        </button>
+                                        <input type="hidden" name="cropped_image_data" id="cropped_image_data">
+                                        <input type="hidden" name="original_image_path_from_browser" id="original_image_path_from_browser">
+                                    </form>
+                                    
+                                    {% if user_media_path %}
+                                    <div class="flex flex-col items-center gap-2 w-full">
+                                        <span class="block text-sm font-medium secondary-text">Or</span>
+                                        <button type="button" onclick="openMediaBrowserForProfilePicture()" class="w-full bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition duration-300 ease-in-out">
+                                            Browse Media
+                                        </button>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            {% endif %} -->
+                        </div>
+                    </div>
+                            
+                            {# --- Friend Request/Unfriend/Snooze/Block Buttons --- #}
+                            {% if not is_owner and not session.get('is_admin') %}
+                                <div class="mt-4 text-center">
+                                    {% if friendship_status == 'friends' %}
+                                        <p class="secondary-text text-sm mb-2">Friends since: <span class="utc-timestamp" data-timestamp="{{ friendship_date }}">{{ friendship_date | format_timestamp }}</span></p>
+
+                                        <div class="flex justify-center items-center space-x-2">
+                                            {% if relationship_info and relationship_info.snooze_until %}
+                                            <form action="{% if viewer_home_url %}{{ viewer_home_url }}{{ url_for('friends.unsnooze_friend_route', puid=profile_user.puid) }}{% else %}{{ url_for('friends.unsnooze_friend_route', puid=profile_user.puid) }}{% endif %}" method="post">
+                                                <button type="submit" class="bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 primary-text font-semibold py-2 px-4 rounded-full text-sm inline-flex items-center gap-2">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                                                    </svg>
+                                                    Unsnooze
+                                                </button>
+                                            </form>
+                                            {% else %}
+                                            <form action="{% if viewer_home_url %}{{ viewer_home_url }}{{ url_for('friends.snooze_friend_route', puid=profile_user.puid) }}{% else %}{{ url_for('friends.snooze_friend_route', puid=profile_user.puid) }}{% endif %}" method="post">
+                                                <button type="submit" class="bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 primary-text font-semibold py-2 px-4 rounded-full text-sm inline-flex items-center gap-2">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.829a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M13 12a1 1 0 11-2 0 1 1 0 012 0z"></path>
+                                                    </svg>
+                                                    Snooze
+                                                </button>
+                                            </form>
+                                            {% endif %}
+                                            {% if relationship_info and relationship_info.is_blocked %}
+                                                <form action="{% if viewer_home_url %}{{ viewer_home_url }}{{ url_for('friends.unblock_friend_route', puid=profile_user.puid) }}{% else %}{{ url_for('friends.unblock_friend_route', puid=profile_user.puid) }}{% endif %}" method="post" onsubmit="event.preventDefault();">
+                                                    <button type="button" onclick="confirmFormSubmission(this.closest('form'), 'Are you sure you want to unblock {{ profile_user.display_name | js_string }}?')" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-full text-sm inline-flex items-center gap-2">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                        </svg>
+                                                        Unblock
+                                                    </button>
+                                                </form>
+                                            {% else %}
+                                                <form action="{% if viewer_home_url %}{{ viewer_home_url }}{{ url_for('friends.block_friend_route', puid=profile_user.puid) }}{% else %}{{ url_for('friends.block_friend_route', puid=profile_user.puid) }}{% endif %}" method="post" onsubmit="event.preventDefault();">
+                                                    <button type="button" onclick="confirmFormSubmission(this.closest('form'), 'Are you sure you want to block {{ profile_user.display_name | js_string }}?')" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-full text-sm inline-flex items-center gap-2">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+                                                        </svg>
+                                                        Block
+                                                    </button>
+                                                </form>
+                                            {% endif %}
+                                            <form action="{% if viewer_home_url %}{{ viewer_home_url }}{{ url_for('friends.unfriend_route', puid=profile_user.puid) }}{% else %}{{ url_for('friends.unfriend_route', puid=profile_user.puid) }}{% endif %}" method="post" onsubmit="event.preventDefault();">
+                                                <button type="button" onclick="confirmFormSubmission(this.closest('form'), 'Are you sure you want to unfriend {{ profile_user.display_name | js_string }}?')" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-full text-sm inline-flex items-center gap-2">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zM21 12h-6"></path>
+                                                    </svg>
+                                                    Unfriend
+                                                </button>
+                                            </form>
+                                        </div>
+                                    {% elif friendship_status == 'pending_sent' %}
+                                        <p class="secondary-text text-sm">Friend request pending.</p>
+                                    {% elif friendship_status == 'pending_received' %}
+                                        <p class="secondary-text text-sm">This user has sent you a request.</p>
+                                        <div class="flex items-center space-x-2 mt-2">
+                                            {% if viewer_home_url %}
+                                                {# Federated viewer - use PUID-based routes #}
+                                                <form action="{% if viewer_home_url %}{{ viewer_home_url }}{{ url_for('friends.accept_friend_request_by_puid_route', sender_puid=profile_user.puid) }}{% else %}{{ url_for('friends.accept_friend_request_by_puid_route', sender_puid=profile_user.puid) }}{% endif %}" method="post" class="inline">
+                                                    <button type="submit" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md text-sm">Accept</button>
+                                                </form>
+                                                <form action="{% if viewer_home_url %}{{ viewer_home_url }}{{ url_for('friends.reject_friend_request_by_puid_route', sender_puid=profile_user.puid) }}{% else %}{{ url_for('friends.reject_friend_request_by_puid_route', sender_puid=profile_user.puid) }}{% endif %}" method="post" class="inline">
+                                                    <button type="submit" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md text-sm">Reject</button>
+                                                </form>
+                                            {% else %}
+                                                {# Local viewer - use request_id-based routes #}
+                                                <form action="{{ url_for('friends.accept_friend_request_route', request_id=incoming_request_id) }}" method="post" class="inline">
+                                                    <button type="submit" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md text-sm">Accept</button>
+                                                </form>
+                                                <form action="{{ url_for('friends.reject_friend_request_route', request_id=incoming_request_id) }}" method="post" class="inline">
+                                                    <button type="submit" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md text-sm">Reject</button>
+                                                </form>
+                                            {% endif %}
+                                        </div>
+                                    {% else %} {# friendship_status == 'not_friends' #}
+                                        <form action="{% if viewer_home_url %}{{ viewer_home_url }}{{ url_for('friends.send_friend_request_route', puid=profile_user.puid) }}{% else %}{{ url_for('friends.send_friend_request_route', puid=profile_user.puid) }}{% endif %}" method="post">
+                                            <button type="submit"
+                                                    class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-full text-sm">
+                                                Send Friend Request
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Quick Actions Card -->
+                    {% if is_owner %}
+                    <div class="p-6 rounded-lg shadow-sm border post-card">
+                        <div class="space-y-2">
+                            <button type="button" onclick="openCreateEventModal('user', '{{ profile_user.puid }}', '{{ profile_user.display_name | js_string }}')" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition duration-300 ease-in-out text-sm inline-flex items-center justify-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                </svg>
+                                Create Event
+                            </button>
+                            <button onclick="App.Discover.openDiscoverUsersModal()"
+                                    class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition duration-300 ease-in-out text-sm inline-flex items-center justify-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path>
+                                </svg>
+                                Discover Users
+                            </button>
+                            <button onclick="openModal('discoverGroupsModal'); fetchDiscoverableGroups();"
+                                    class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition duration-300 ease-in-out text-sm inline-flex items-center justify-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z"></path>
+                                </svg>
+                                Discover Groups
+                            </button>
+                            <!-- NEW: Parental Controls Button (only for parents) -->
+                            {% if is_parent %}
+                            <a href="{{ url_for('parental.parental_dashboard') }}" 
+                               class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition duration-300 ease-in-out text-sm inline-flex items-center justify-center gap-2 relative">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                </svg>
+                                <span>Parental Controls</span>
+                                {% if pending_approvals_count > 0 %}
+                                <span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                                    {{ pending_approvals_count if pending_approvals_count < 100 else '99+' }}
+                                </span>
+                                {% endif %}
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- About Card -->
+                    <div class="p-6 rounded-lg shadow-sm border post-card">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-lg font-bold primary-text">About</h2>
+                            {% if is_owner %}
+                                <button type="button" onclick="openProfileInfoModal()" class="text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                                    Edit
+                                </button>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Bio moved up to match screenshot -->
+                        {% if profile_info.bio and profile_info.bio.value %}
+                        <div class="my-4">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="font-semibold secondary-text">Bio:</span>
+                                <span class="text-xs">
+                                    {% if profile_info.bio.privacy_public %}<span class="privacy-indicator privacy-public">Public</span>{% endif %}
+                                    {% if profile_info.bio.privacy_local %}<span class="privacy-indicator privacy-local">Local</span>{% endif %}
+                                    {% if profile_info.bio.privacy_friends %}<span class="privacy-indicator privacy-friends">Friends</span>{% endif %}
+                                    {% if not profile_info.bio.privacy_public and not profile_info.bio.privacy_local and not profile_info.bio.privacy_friends %}<span class="privacy-indicator privacy-private">Private</span>{% endif %}
+                                </span>
+                            </div>
+                            <p class="text-sm text-gray-600 dark:text-gray-300 italic text-center">"{{ profile_info.bio.value }}"</p>
+                        </div>
+                        {% endif %}
+
+                        <div class="space-y-3 text-sm">
+                            {# Birthday (DOB) #}
+                            {% if profile_info.dob and profile_info.dob.value %}
+                            <div class="flex items-start space-x-3">
+                                <svg class="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                </svg>
+                                <div class="flex-grow">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <span class="font-semibold secondary-text">Birthday:</span>
+                                        <span class="text-xs">
+                                            {% if profile_info.dob.privacy_public %}<span class="privacy-indicator privacy-public">Public</span>{% endif %}
+                                            {% if profile_info.dob.privacy_local %}<span class="privacy-indicator privacy-local">Local</span>{% endif %}
+                                            {% if profile_info.dob.privacy_friends %}<span class="privacy-indicator privacy-friends">Friends</span>{% endif %}
+                                            {% if not profile_info.dob.privacy_public and not profile_info.dob.privacy_local and not profile_info.dob.privacy_friends %}<span class="privacy-indicator privacy-private">Private</span>{% endif %}
+                                        </span>
+                                    </div>
+                                    <div class="mt-1 secondary-text">
+                                        <span id="display-dob-value">{{ profile_info.dob.value | format_date }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            {# Hometown #}
+                            {% if profile_info.hometown and profile_info.hometown.value %}
+                            <div class="flex items-start space-x-3">
+                                <svg class="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                </svg>
+                                <div class="flex-grow">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <span class="font-semibold secondary-text">Hometown:</span>
+                                        <span class="text-xs">
+                                            {% if profile_info.hometown.privacy_public %}<span class="privacy-indicator privacy-public">Public</span>{% endif %}
+                                            {% if profile_info.hometown.privacy_local %}<span class="privacy-indicator privacy-local">Local</span>{% endif %}
+                                            {% if profile_info.hometown.privacy_friends %}<span class="privacy-indicator privacy-friends">Friends</span>{% endif %}
+                                            {% if not profile_info.hometown.privacy_public and not profile_info.hometown.privacy_local and not profile_info.hometown.privacy_friends %}<span class="privacy-indicator privacy-private">Private</span>{% endif %}
+                                        </span>
+                                    </div>
+                                    <div class="mt-1">
+                                        <a href="https://www.google.com/maps/search/{{ profile_info.hometown.value | urlencode }}" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">{{ profile_info.hometown.value }}</a>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            {# Occupation #}
+                            {% if profile_info.occupation and profile_info.occupation.value %}
+                            <div class="flex items-start space-x-3">
+                                <svg class="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                                </svg>
+                                <div class="flex-grow">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <span class="font-semibold secondary-text">Occupation:</span>
+                                        <span class="text-xs">
+                                            {% if profile_info.occupation.privacy_public %}<span class="privacy-indicator privacy-public">Public</span>{% endif %}
+                                            {% if profile_info.occupation.privacy_local %}<span class="privacy-indicator privacy-local">Local</span>{% endif %}
+                                            {% if profile_info.occupation.privacy_friends %}<span class="privacy-indicator privacy-friends">Friends</span>{% endif %}
+                                            {% if not profile_info.occupation.privacy_public and not profile_info.occupation.privacy_local and not profile_info.occupation.privacy_friends %}<span class="privacy-indicator privacy-private">Private</span>{% endif %}
+                                        </span>
+                                    </div>
+                                    <div class="mt-1 secondary-text">
+                                        {{ profile_info.occupation.value }}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Family block moved here and reformatted -->
+                        {% if family_relationships %}
+                        <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                            <h3 class="text-md font-bold primary-text mb-3">Family</h3>
+                            <div class="space-y-3">
+                            {% for rel in family_relationships %}
+                                <div class="flex items-start justify-between">
+                                    <div class="flex items-center gap-x-3 flex-grow">
+                                        <span class="font-medium text-sm secondary-text w-20 flex-shrink-0">{{ rel.relationship_type }}:</span>
+                                        {% set relative_user_for_url = {'puid': rel.relative_puid, 'hostname': rel.relative_hostname} %}
+                                        <a href="{{ federated_user_profile_url(relative_user_for_url) }}" class="flex items-center name-link text-sm">
+                                            <div class="w-8 h-8 rounded-full overflow-hidden mr-2 border border-gray-300 dark:border-gray-600 flex-shrink-0">
+                                                {% if rel.profile_picture_path %}
+                                                    {% if rel.relative_hostname %}
+                                                        {% set insecure_mode = config.get('FEDERATION_INSECURE_MODE', False) %}
+                                                        {% set protocol = 'http' if insecure_mode else 'https' %}
+                                                        <img src="{{ protocol }}://{{ rel.relative_hostname }}/profile_pictures/{{ rel.profile_picture_path }}" alt="Profile Picture" class="w-full h-full object-cover" onerror="this.src='{{ url_for('static', filename='images/default_avatar.png') }}';">
+                                                    {% else %}
+                                                        <img src="{{ url_for('main.serve_profile_picture', filename=rel.profile_picture_path) }}" alt="Profile Picture" class="w-full h-full object-cover" onerror="this.src='{{ url_for('static', filename='images/default_avatar.png') }}';">
+                                                    {% endif %}
+                                                {% else %}
+                                                    <svg class="w-full h-full text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                                                    </svg>
+                                                {% endif %}
+                                            </div>
+                                            <div>
+                                                <span>{{ rel.relative_display_name }}</span>
+                                                {% if rel.anniversary_date %}
+                                                <span class="block text-xs text-gray-500 dark:text-gray-400">{{ rel.anniversary_date | format_date }}</span>
+                                                {% endif %}
+                                            </div>
+                                        </a>
+                                    </div>
+                                    <span class="text-xs ml-2 flex-shrink-0">
+                                        {% if rel.privacy_public %}<span class="privacy-indicator privacy-public">Public</span>{% endif %}
+                                        {% if rel.privacy_local %}<span class="privacy-indicator privacy-local">Local</span>{% endif %}
+                                        {% if rel.privacy_friends %}<span class="privacy-indicator privacy-friends">Friends</span>{% endif %}
+                                        {% if not rel.privacy_public and not rel.privacy_local and not rel.privacy_friends %}<span class="privacy-indicator privacy-private">Private</span>{% endif %}
+                                    </span>
+                                </div>
+                            {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- NEW: Friends Preview Card -->
+                    {% if friends_count > 0 %}
+                    <div class="p-6 rounded-lg shadow-sm border post-card">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-2">
+                                <h2 class="text-lg font-bold text-gray-900 dark:text-white">Friends</h2>
+                                <span class="text-xs">
+                                    {% if is_owner %}
+                                        {# Owner sees all active privacy settings #}
+                                        {% if profile_info.show_friends.privacy_public %}<span class="privacy-indicator privacy-public">Public</span>{% endif %}
+                                        {% if profile_info.show_friends.privacy_local %}<span class="privacy-indicator privacy-local">Local</span>{% endif %}
+                                        {% if profile_info.show_friends.privacy_friends %}<span class="privacy-indicator privacy-friends">Friends</span>{% endif %}
+                                        {% if not profile_info.show_friends.privacy_public and not profile_info.show_friends.privacy_local and not profile_info.show_friends.privacy_friends %}<span class="privacy-indicator privacy-private">Private</span>{% endif %}
+                                    {% else %}
+                                        {# Non-owner sees only the privacy level they qualify for #}
+                                        {% if profile_info.show_friends.privacy_public %}
+                                            <span class="privacy-indicator privacy-public">Public</span>
+                                        {% elif profile_info.show_friends.privacy_friends and friendship_status == 'friends' %}
+                                            <span class="privacy-indicator privacy-friends">Friends</span>
+                                        {% elif profile_info.show_friends.privacy_local and not is_federated_viewer %}
+                                            <span class="privacy-indicator privacy-local">Local</span>
+                                        {% endif %}
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <span class="text-sm text-gray-500 dark:text-gray-400">{{ friends_count }}</span>
+                        </div>
+                        {% if friends %}
+                        <div class="grid grid-cols-3 gap-2">
+                            {% for friend in friends[:9] %}
+                                <a href="{{ federated_user_profile_url(friend) }}" title="{{ friend.display_name or friend.username }}">
+                                    <div class="aspect-square rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-700">
+                                        {% if friend.profile_picture_path %}
+                                            {% if friend.hostname %}
+                                                {% set insecure_mode = config.get('FEDERATION_INSECURE_MODE', False) %}
+                                                {% set protocol = 'http' if insecure_mode else 'https' %}
+                                                <img src="{{ protocol }}://{{ friend.hostname }}/profile_pictures/{{ friend.profile_picture_path }}" alt="{{ friend.display_name }}" class="w-full h-full object-cover" onerror="this.src='{{ url_for('static', filename='images/default_avatar.png') }}';">
+                                            {% else %}
+                                                <img src="{{ url_for('main.serve_profile_picture', filename=friend.profile_picture_path) }}" alt="{{ friend.display_name }}" class="w-full h-full object-cover" onerror="this.src='{{ url_for('static', filename='images/default_avatar.png') }}';">
+                                            {% endif %}
+                                        {% else %}
+                                            <svg class="w-full h-full text-gray-500 p-2" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                                            </svg>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                            {% endfor %}
+                        </div>
+                        {% if is_owner %}
+                            <a href="{{ url_for('friends.friends_list') }}" data-route="/friends/" class="block w-full text-center mt-4 text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                                View All Friends
+                            </a>
+                        {% else %}
+                            <a href="{{ url_for('friends.view_user_friends', puid=profile_user.puid) }}" class="block w-full text-center mt-4 text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                                View All Friends
+                            </a>
+                        {% endif %}
+                        {% else %}
+                        <p class="text-center text-sm text-gray-500 dark:text-gray-400 py-4">Friends list is private</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Media Preview Card -->
+                    <div class="p-6 rounded-lg shadow-sm border post-card">
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="text-lg font-bold text-gray-900 dark:text-white">Latest Media</h2>
+                            <span class="text-sm text-gray-500 dark:text-gray-400">{{ total_media_count }}</span>
+                        </div>
+                         {% if latest_gallery_media %}
+                            <div class="grid grid-cols-3 gap-2">
+                                {% for media_item in latest_gallery_media[:9] %}
+                                    <a href="{{ url_for('main.view_media', muid=media_item.muid) }}" id="media-{{ media_item.muid }}" class="gallery-media-item-link">
+                                         {% set media_url = federated_media_url(media_item) %}
+                                        <div class="relative aspect-square rounded-lg overflow-hidden shadow-sm cursor-pointer gallery-media-item"
+                                             data-media-id="{{ media_item.id }}"
+                                             data-muid="{{ media_item.muid }}"
+                                             data-media-url="{{ media_url }}"
+                                             data-media-type="{{ media_item.media_type }}"
+                                             data-alt-text="{{ media_item.alt_text | default('') }}"
+                                             data-username="{{ media_item.username }}"
+                                             data-puid="{{ media_item.puid }}">
+
+                                            {% if media_item.media_type == 'image' %}
+                                                {# Check if media is from a remote node #}
+                                                {% if media_item.origin_hostname and media_item.origin_hostname != config.get('NODE_HOSTNAME') %}
+                                                    {# Remote media - use full URL directly, no thumbnail #}
+                                                    <img src="{{ media_url }}"
+                                                        alt="Post Media"
+                                                        class="w-full h-full object-cover"
+                                                        loading="lazy">
+                                                {% else %}
+                                                    {# Local media - use thumbnail with fallback #}
+                                                    {% set thumb_url = url_for('main.serve_thumbnail',
+                                                        puid=media_item.puid,
+                                                        filename=media_item.media_file_path) %}
+                                                    <img src="{{ thumb_url }}"
+                                                        alt="Post Media"
+                                                        class="w-full h-full object-cover"
+                                                        loading="lazy"
+                                                        onerror="this.src='{{ media_url }}'">
+                                                {% endif %}
+                                            {% elif media_item.media_type == 'video' %}
+                                                <video preload="metadata" muted class="w-full h-full object-cover">
+                                                    <source src="{{ media_url }}#t=0.1" type="video/mp4">
+                                                </video>
+                                                <div class="play-icon">&#9658;</div>
+                                            {% else %}
+                                                <div class="w-full h-full flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-center text-xs">
+                                                    Error
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </a>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p class="text-center secondary-text text-sm">No media posted yet.</p>
+                        {% endif %}
+                        {% if is_owner %}
+                            <a href="{{ url_for('main.my_media_gallery_page') }}" data-route="/my_media/" class="block w-full text-center mt-4 text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                                View All Media
+                            </a>
+                        {% else %}
+                            <a href="{{ url_for('main.media_gallery', puid=profile_user.puid) }}" class="block w-full text-center mt-4 text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                                View All Media
+                            </a>
+                        {% endif %}
+                    </div>
+
+                </div>
+            </aside>
+            
+            <!-- Main Content Area -->
+            <main class="lg:col-span-9 space-y-6">
+                
+                <!-- Page Header -->
+                <div class="post-card p-6 rounded-lg shadow-sm">
+                    <h1 class="text-3xl font-bold primary-text mb-2">Parental Controls</h1>
+                    <p class="secondary-text">Manage approval requests from children under your supervision</p>
+                </div>
+
+                <!-- Summary Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="post-card p-6 rounded-lg shadow-sm text-center">
+                        <div class="text-4xl font-bold text-blue-600 dark:text-blue-400 mb-2">{{ children|length }}</div>
+                        <div class="text-sm secondary-text">Children Supervised</div>
+                    </div>
+                    <div class="post-card p-6 rounded-lg shadow-sm text-center">
+                        <div class="text-4xl font-bold text-orange-600 dark:text-orange-400 mb-2">{{ approvals|length }}</div>
+                        <div class="text-sm secondary-text">Pending Approvals</div>
+                    </div>
+                    <div class="post-card p-6 rounded-lg shadow-sm text-center">
+                        <div class="text-4xl font-bold text-green-600 dark:text-green-400 mb-2">Active</div>
+                        <div class="text-sm secondary-text">Control Status</div>
+                    </div>
+                </div>
+
+                <!-- Children List -->
+                {% if children %}
+                    {% for child in children %}
+                    <div class="post-card p-6 rounded-lg shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-4">
+                                <div class="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-300 dark:border-gray-600">
+                                    {% if child.profile_picture_path %}
+                                        <img src="{{ url_for('main.serve_profile_picture', filename=child.profile_picture_path) }}" 
+                                             alt="{{ child.display_name }}" class="w-full h-full object-cover">
+                                    {% else %}
+                                        <svg class="w-full h-full text-gray-400 dark:text-gray-500 p-2" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/>
+                                        </svg>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <h2 class="text-xl font-bold primary-text">{{ child.display_name }}</h2>
+                                    <a href="{{ url_for('main.user_profile', puid=child.puid) }}" 
+                                       class="text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                                        View Profile →
+                                    </a>
+                                </div>
+                            </div>
+                            {% if child.pending_count > 0 %}
+                            <div class="bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 px-4 py-2 rounded-full font-semibold text-sm">
+                                {{ child.pending_count }} Pending
+                            </div>
+                            {% else %}
+                            <div class="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 px-4 py-2 rounded-full font-semibold text-sm">
+                                ✓ All Clear
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="post-card p-8 rounded-lg shadow-sm text-center">
+                        <svg class="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                        </svg>
+                        <p class="secondary-text">No children under supervision</p>
+                    </div>
+                {% endif %}
+
+                <!-- Pending Approvals Section -->
+                {% if approvals %}
+                <div class="post-card p-6 rounded-lg shadow-sm">
+                    <h2 class="text-2xl font-bold primary-text mb-4">Pending Approval Requests</h2>
+                    <div class="space-y-4">
+                        {% for approval in approvals %}
+                        <div class="border-b dark:border-gray-700 pb-4 last:border-b-0 last:pb-0">
+                            <div class="flex items-start justify-between gap-4">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2 mb-2">
+                                        {% if approval.approval_type == 'friend_request_out' %}
+                                        <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+                                        </svg>
+                                        <span class="font-semibold primary-text">Friend Request</span>
+                                        {% elif approval.approval_type == 'group_join' %}
+                                        <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                        </svg>
+                                        <span class="font-semibold primary-text">Group Join</span>
+                                        {% elif approval.approval_type == 'dm_start_out' %}
+                                        <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-3 3v-3z"/>
+                                        </svg>
+                                        <span class="font-semibold primary-text">Direct Message Request</span>
+                                        {% elif approval.approval_type == 'dm_start_in' %}
+                                        <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-3 3v-3z"/>
+                                        </svg>
+                                        <span class="font-semibold primary-text">Incoming Message Request</span>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    {% if approval.approval_type not in ['dm_start_out', 'dm_start_in'] %}
+                                    <p class="text-sm secondary-text mb-1">
+                                        <span class="font-semibold">{{ approval.child_display_name }}</span> wants to {{ approval.approval_type.replace('_', ' ') }}
+                                    </p>
+                                    {% endif %}
+                                    
+                                    {% if approval.request_data_parsed %}
+                                        {% set data = approval.request_data_parsed %}
+                                        <p class="text-sm secondary-text">
+                                            {% if approval.approval_type == 'friend_request_out' %}
+                                                Send friend request to <span class="font-semibold">{{ data.receiver_display_name or 'Unknown' }}</span>
+                                            {% elif approval.approval_type == 'group_join' %}
+                                                Join group <span class="font-semibold">{{ data.group_name or 'Unknown' }}</span>
+                                            {% endif %}
+                                            {% if approval.target_hostname %}
+                                                <span class="text-xs opacity-70">({{ approval.target_hostname }})</span>
+                                            {% endif %}
+                                            {% elif approval.approval_type == 'dm_start_out' %}
+                                                <span class="font-semibold">{{ approval.child_display_name }}</span> wants to start a DM with <span class="font-semibold">{{ data.target_display_name or 'Unknown' }}</span>
+                                                {% if approval.target_hostname %}
+                                                    on <span class="font-semibold">{{ approval.target_hostname }}</span>
+                                                {% endif %}
+                                            {% elif approval.approval_type == 'dm_start_in' %}
+                                                <span class="font-semibold">{{ data.sender_display_name or 'Unknown' }}</span>
+                                                {% if approval.target_hostname %}
+                                                    (from <span class="font-semibold">{{ approval.target_hostname }}</span>)
+                                                {% endif %}
+                                                wants to send <span class="font-semibold">{{ approval.child_display_name }}</span> a direct message
+                                        </p>
+                                    {% endif %}
+                                    
+                                    <p class="text-xs secondary-text mt-2">Requested: {{ approval.created_at }}</p>
+                                </div>
+                                
+                                <div class="flex gap-2 flex-shrink-0">
+                                    <button onclick="approveRequest({{ approval.id }})" 
+                                            class="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 text-white px-4 py-2 rounded-lg font-semibold transition text-sm">
+                                        Approve
+                                    </button>
+                                    <button onclick="denyRequest({{ approval.id }})" 
+                                            class="bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600 text-white px-4 py-2 rounded-lg font-semibold transition text-sm">
+                                        Deny
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Modals -->
+	{% include '_create_event_modal.html' %}
+
+    <!-- Enhanced Discover Users & Pages Modal with Tabs -->
+    <div id="discoverUsersModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 900px;">
+            <span class="close-button" onclick="closeModal('discoverUsersModal')">&times;</span>
+            <h2 class="text-xl font-bold mb-4 primary-text">Discover Users & Pages</h2>
+            
+            <!-- Tabs -->
+            <div class="flex border-b border-gray-300 dark:border-gray-600 mb-4">
+                <button id="discoverUsersTabDiscover" class="tab-button px-4 py-2 font-semibold border-b-2 border-blue-500 text-blue-600 dark:text-blue-400" onclick="App.Discover.switchUsersTab('discover')">
+                    Discover
+                </button>
+                <button id="discoverUsersTabHidden" class="tab-button px-4 py-2 font-semibold border-b-2 border-transparent secondary-text hover:text-gray-900 dark:hover:text-gray-100" onclick="App.Discover.switchUsersTab('hidden')">
+                    Hidden
+                </button>
+            </div>
+            
+            <!-- Discover Tab Content -->
+            <div id="discoverUsersDiscoverContent" class="tab-content">
+                <div class="grid grid-cols-2 gap-4">
+                    <!-- Users Column -->
+                    <div class="flex flex-col">
+                        <h3 class="text-lg font-semibold mb-2 primary-text">Users</h3>
+                        <div class="mb-2">
+                            <input type="search" id="discoverUsersSearchInput" placeholder="Search users..." class="w-full px-3 py-2 text-sm border rounded-lg form-input">
+                        </div>
+                        <div id="discoverUsersLoading" class="text-center secondary-text py-4" style="display: none;">Loading...</div>
+                        <div id="discoverUsersError" class="flash-message flash-danger text-sm" style="display: none;"></div>
+                        <div id="discoverUsersList" class="space-y-2 max-h-96 overflow-y-auto pr-2"></div>
+                        <p id="noDiscoverableUsers" class="text-center secondary-text text-sm mt-4" style="display: none;">No new users to discover.</p>
+                    </div>
+                    
+                    <!-- Pages Column -->
+                    <div class="flex flex-col">
+                        <h3 class="text-lg font-semibold mb-2 primary-text">Public Pages</h3>
+                        <div class="mb-2">
+                            <input type="search" id="discoverPagesSearchInput" placeholder="Search pages..." class="w-full px-3 py-2 text-sm border rounded-lg form-input">
+                        </div>
+                        <div id="discoverPagesLoading" class="text-center secondary-text py-4" style="display: none;">Loading...</div>
+                        <div id="discoverPagesError" class="flash-message flash-danger text-sm" style="display: none;"></div>
+                        <div id="discoverPagesList" class="space-y-2 max-h-96 overflow-y-auto pr-2"></div>
+                        <p id="noDiscoverablePages" class="text-center secondary-text text-sm mt-4" style="display: none;">No new pages to discover.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Hidden Tab Content -->
+            <div id="discoverUsersHiddenContent" class="tab-content hidden">
+                <div class="grid grid-cols-2 gap-4">
+                    <!-- Hidden Users Column -->
+                    <div class="flex flex-col">
+                        <h3 class="text-lg font-semibold mb-2 primary-text">Hidden Users</h3>
+                        <div class="mb-2">
+                            <input type="search" id="hiddenUsersSearchInput" placeholder="Search hidden users..." class="w-full px-3 py-2 text-sm border rounded-lg form-input">
+                        </div>
+                        <div id="hiddenUsersLoading" class="text-center secondary-text py-4" style="display: none;">Loading...</div>
+                        <div id="hiddenUsersError" class="flash-message flash-danger text-sm" style="display: none;"></div>
+                        <div id="hiddenUsersList" class="space-y-2 max-h-96 overflow-y-auto pr-2"></div>
+                        <p id="noHiddenUsers" class="text-center secondary-text text-sm mt-4" style="display: none;">No hidden users.</p>
+                    </div>
+                    
+                    <!-- Hidden Pages Column -->
+                    <div class="flex flex-col">
+                        <h3 class="text-lg font-semibold mb-2 primary-text">Hidden Pages</h3>
+                        <div class="mb-2">
+                            <input type="search" id="hiddenPagesSearchInput" placeholder="Search hidden pages..." class="w-full px-3 py-2 text-sm border rounded-lg form-input">
+                        </div>
+                        <div id="hiddenPagesLoading" class="text-center secondary-text py-4" style="display: none;">Loading...</div>
+                        <div id="hiddenPagesError" class="flash-message flash-danger text-sm" style="display: none;"></div>
+                        <div id="hiddenPagesList" class="space-y-2 max-h-96 overflow-y-auto pr-2"></div>
+                        <p id="noHiddenPages" class="text-center secondary-text text-sm mt-4" style="display: none;">No hidden pages.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex justify-center mt-4">
+                <button onclick="closeModal('discoverUsersModal')" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enhanced Discover Groups Modal with Tabs -->
+    <div id="discoverGroupsModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeModal('discoverGroupsModal')">&times;</span>
+            <h2 class="text-xl font-bold mb-4 primary-text">Discover Groups</h2>
+            
+            <!-- Tabs -->
+            <div class="flex border-b border-gray-300 dark:border-gray-600 mb-4">
+                <button id="discoverGroupsTabDiscover" class="tab-button px-4 py-2 font-semibold border-b-2 border-blue-500 text-blue-600 dark:text-blue-400" onclick="App.Discover.switchGroupsTab('discover')">
+                    Discover
+                </button>
+                <button id="discoverGroupsTabHidden" class="tab-button px-4 py-2 font-semibold border-b-2 border-transparent secondary-text hover:text-gray-900 dark:hover:text-gray-100" onclick="App.Discover.switchGroupsTab('hidden')">
+                    Hidden
+                </button>
+            </div>
+            
+            <!-- Discover Tab Content -->
+            <div id="discoverGroupsDiscoverContent" class="tab-content">
+                <div class="mb-4">
+                    <input type="search" id="discoverGroupsSearchInput" placeholder="Search by group name or description..." class="w-full px-4 py-2 border rounded-lg form-input">
+                </div>
+                <div id="discoverGroupsLoading" class="text-center secondary-text" style="display: none;">Loading...</div>
+                <div id="discoverGroupsError" class="flash-message flash-danger" style="display: none;"></div>
+                <div id="discoverGroupsList" class="space-y-4 max-h-96 overflow-y-auto"></div>
+                <p id="noDiscoverableGroups" class="text-center secondary-text mt-4" style="display: none;">No new groups to discover.</p>
+            </div>
+            
+            <!-- Hidden Tab Content -->
+            <div id="discoverGroupsHiddenContent" class="tab-content hidden">
+                <div class="mb-4">
+                    <input type="search" id="hiddenGroupsSearchInput" placeholder="Search hidden groups..." class="w-full px-4 py-2 border rounded-lg form-input">
+                </div>
+                <div id="hiddenGroupsLoading" class="text-center secondary-text" style="display: none;">Loading...</div>
+                <div id="hiddenGroupsError" class="flash-message flash-danger" style="display: none;"></div>
+                <div id="hiddenGroupsList" class="space-y-4 max-h-96 overflow-y-auto"></div>
+                <p id="noHiddenGroups" class="text-center secondary-text mt-4" style="display: none;">No hidden groups.</p>
+            </div>
+            
+            <div class="flex justify-center mt-4">
+                <button onclick="closeModal('discoverGroupsModal')" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Join Group Request Modal -->
+    <div id="joinGroupRequestModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeModal('joinGroupRequestModal')">&times;</span>
+            <h2 class="text-xl font-bold primary-text mb-4">Request to Join Group</h2>
+            
+            <div id="joinRulesSection" class="mb-6 hidden">
+                <h3 class="text-lg font-semibold primary-text mb-2">Group Rules</h3>
+                <div id="joinRulesText" class="p-4 rounded-lg secondary-bg border mb-4 whitespace-pre-wrap secondary-text"></div>
+                <label class="flex items-center space-x-2 mb-4">
+                    <input type="checkbox" id="agreeToRules" class="form-checkbox">
+                    <span class="secondary-text">I agree to follow these group rules</span>
+                </label>
+            </div>
+            
+            <div id="joinQuestionsSection" class="mb-6 hidden">
+                <h3 class="text-lg font-semibold primary-text mb-2">Please Answer These Questions</h3>
+                <div id="joinQuestionsContainer" class="space-y-4"></div>
+            </div>
+            
+            <div class="flex justify-end space-x-2">
+                <button onclick="closeModal('joinGroupRequestModal')" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg">
+                    Cancel
+                </button>
+                <button id="submitJoinRequest" onclick="submitJoinRequestWithResponses()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg">
+                    Send Request
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notificationModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="notification-header">
+                <h2 class="text-xl font-bold primary-text">Notifications</h2>
+                <button type="button" class="close-button" onclick="closeModal('notificationModal')">&times;</button>
+            </div>
+            <div id="notification-list" class="notification-list">
+                <p id="notification-loading" class="text-center secondary-text p-4">Loading...</p>
+            </div>
+            <div class="notification-footer">
+                <button id="mark-all-read-button" class="text-sm text-blue-600 dark:text-blue-400 hover:underline">Mark all as read</button>
+            </div>
+        </div>
+    </div>
+
+{% include '_settings_modal.html' %}
+
+    <script>
+        // NEW: Central configuration object to pass data from Flask to JavaScript
+        window.appConfig = {
+			isSpaPage: false, // This is a non-SPA page
+            viewerToken: "{{ viewer_token or '' }}",
+            isFederatedViewer: {{ 'true' if is_federated_viewer else 'false' }},
+            viewer_home_url: "{{ viewer_home_url or '' }}",
+            loggedInUsername: "{{ session.get('username') or ('' if not session.get('is_federated_viewer')) }}",
+            loggedInUserPuid: "{{ viewer_puid or '' }}",
+            isCurrentUserAdmin: {{ 'true' if session.get('is_admin') else 'false' }},
+            browseMediaBaseUrl: "{{ url_for('main.browse_media', mode='multi_select') }}",
+            serveMediaBaseUrl: "{{ url_for('main.serve_user_media', puid='DUMMY_PUID', filename='DUMMY_FILE') }}".replace('DUMMY_PUID/DUMMY_FILE', ''),
+            friendsListForJS: {{ friends | tojson }},
+            // MODIFICATION: Added localHostname for JS logic
+            localHostname: "{{ config.get('NODE_HOSTNAME') or request.host.split(':')[0] | js_string }}",
+            // NEW: Pass settings data, including email settings
+            userSettings: {
+                textSize: {{ user_settings.text_size | default(100) }},
+                timezone: {{ user_settings.timezone | tojson }},
+                theme: "{{ user_settings.theme | default('light') }}",
+                user_email_address: "{{ user_settings.user_email_address | default('') }}",
+                email_notifications_enabled: "{{ user_settings.email_notifications_enabled }}" === 'True',
+                email_on_friend_request: "{{ user_settings.email_on_friend_request }}" === 'True',
+                email_on_friend_accept: "{{ user_settings.email_on_friend_accept }}" === 'True',
+                email_on_wall_post: "{{ user_settings.email_on_wall_post }}" === 'True',
+                email_on_mention: "{{ user_settings.email_on_mention }}" === 'True',
+                email_on_event_invite: "{{ user_settings.email_on_event_invite }}" === 'True',
+                email_on_event_update: "{{ user_settings.email_on_event_update }}" === 'True',
+                email_on_media_tag: "{{ user_settings.email_on_media_tag }}" === 'True',
+                email_on_post_tag: "{{ user_settings.email_on_post_tag }}" === 'True',
+                email_on_media_mention: "{{ user_settings.email_on_media_mention }}" === 'True',
+                email_on_parental_approval: "{{ user_settings.email_on_parental_approval }}" === 'True'
+            },
+            saveSettingsUrl: "{{ url_for('settings.update_settings') }}",
+            saveAccountSettingsUrl: "{{ url_for('settings.update_account_credentials') }}",
+            logoutUrl: "{{ url_for('auth.logout') }}",
+            // NEW: Session management URLs
+            getSessionsUrl: "{{ url_for('settings.get_sessions') }}",
+            logoutSessionUrlBase: "{{ url_for('settings.logout_session', session_id='DUMMY_ID') }}",
+            logoutAllSessionsUrl: "{{ url_for('settings.logout_all_sessions') }}"
+
+        }
+        
+        function approveRequest(approvalId) {
+            fetch(`/parental/approve/${approvalId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    App.Toast.show(data.error, 'error');
+                } else {
+                    App.Toast.show(data.message || 'Request approved!', 'success');
+                    setTimeout(() => window.location.reload(), 1000);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                App.Toast.show('Failed to approve request', 'error');
+            });
+        }
+        
+        function denyRequest(approvalId) {
+            App.Modal.showConfirm('Deny this request? Your child will be notified.', () => {
+                fetch(`/parental/deny/${approvalId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        App.Toast.show(data.error, 'error');
+                    } else {
+                        App.Toast.show(data.message || 'Request denied', 'success');
+                        setTimeout(() => window.location.reload(), 1000);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    App.Toast.show('Failed to deny request', 'error');
+                });
+            });
+        }
+        App.initCore();
+        };
+    </script>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pwa.js') }}"></script>
+
+    <script>
+        // Convert Flask flash messages to toasts
+        document.addEventListener('DOMContentLoaded', () => {
+            const flashMessages = {{ get_flashed_messages(with_categories=true) | tojson | safe }};
+            
+            if (flashMessages && flashMessages.length > 0) {
+                // Wait for toast system to be initialized
+                setTimeout(() => {
+                    flashMessages.forEach(([category, message]) => {
+                        const typeMap = {
+                            'success': 'success',
+                            'error': 'error',
+                            'danger': 'error',
+                            'warning': 'warning',
+                            'info': 'info',
+                            'message': 'info'
+                        };
+                        
+                        const toastType = typeMap[category] || 'info';
+                        
+                        if (App.Toast && typeof App.Toast.show === 'function') {
+                            App.Toast.show(message, toastType);
+                        }
+                    });
+                }, 100); // Small delay to ensure Toast is loaded
+            }
+        });
+    </script>
+
+    {% include '_2fa_setup_modal.html' %}
+    {% include '_2fa_manage_modal.html' %}
+</body>
+</html>

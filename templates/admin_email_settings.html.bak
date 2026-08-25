@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#3b82f6" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#1e3a8a" media="(prefers-color-scheme: dark)">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Nebulae">
+    
+    <!-- PWA Icons -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192x192.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192x192.png') }}">
+    <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='icons/icon-512x512.png') }}">
+    <title>Email Settings - Admin</title>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+
+    <!-- Preload critical CSS -->
+    <link rel="preload" href="{{ url_for('static', filename='css/style.css') }}" as="style">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="flex flex-col min-h-screen items-center justify-center py-8 px-4 bg-cover bg-center bg-no-repeat bg-fixed backdrop-blur-sm" style="background-image: url('{{ url_for('static', filename='images/branding/background_1920x1080.png') }}');">
+    <!-- Dark overlay for better readability -->
+    <div class="fixed inset-0 bg-black/30 -z-10"></div>
+    <!-- Toast Container (required for notifications) -->
+    <div id="toast-container"></div>
+    <div class="max-w-2xl w-full bg-white p-8 rounded-lg shadow-xl border border-gray-200">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Email (SMTP) Settings</h1>
+
+        <form action="{{ url_for('admin.admin_email_settings') }}" method="POST" class="space-y-6">
+            
+            <!-- Enable Email Notifications -->
+            <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <label for="smtp_enabled" class="text-lg font-semibold text-gray-800">Enable email notifications</label>
+                <label class="theme-switch">
+                    <input type="checkbox" id="smtp_enabled" name="smtp_enabled" {% if config.smtp_enabled %}checked{% endif %}>
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <!-- SMTP Host -->
+            <div>
+                <label for="smtp_host" class="block text-sm font-medium text-gray-700 mb-1">Host <span class="text-red-500">*</span></label>
+                <p class="text-xs text-gray-500 mb-1">Host of the email server (e.g., smtp.gmail.com)</p>
+                <input type="text" id="smtp_host" name="smtp_host" value="{{ config.smtp_host or '' }}" required
+                       class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+            </div>
+
+            <!-- SMTP Port -->
+            <div>
+                <label for="smtp_port" class="block text-sm font-medium text-gray-700 mb-1">Port <span class="text-red-500">*</span></label>
+                <p class="text-xs text-gray-500 mb-1">Port of the email server (e.g 25, 465, or 587)</p>
+                <input type="number" id="smtp_port" name="smtp_port" value="{{ config.smtp_port or '' }}" required
+                       class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+            </div>
+
+            <!-- SMTP Username -->
+            <div>
+                <label for="smtp_username" class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                <p class="text-xs text-gray-500 mb-1">Username to use when authenticating with the email server</p>
+                <input type="text" id="smtp_username" name="smtp_username" value="{{ config.smtp_username or '' }}"
+                       class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+            </div>
+
+            <!-- SMTP Password -->
+            <div>
+                <label for="smtp_password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <p class="text-xs text-gray-500 mb-1">Password for the email server. Leave blank to keep existing password.</p>
+                <input type="password" id="smtp_password" name="smtp_password"
+                       class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                       placeholder="••••••••••••">
+            </div>
+
+            <!-- From Address -->
+            <div>
+                <label for="smtp_from_address" class="block text-sm font-medium text-gray-700 mb-1">From Address <span class="text-red-500">*</span></label>
+                <p class="text-xs text-gray-500 mb-1">Sender email address, for example: "My Social App &lt;noreply@example.com&gt;".</p>
+                <input type="text" id="smtp_from_address" name="smtp_from_address" value="{{ config.smtp_from_address or '' }}" required
+                       class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+            </div>
+            
+            <!-- Ignore Certificate Errors -->
+            <div class="flex items-center justify-between p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                <div>
+                    <label for="smtp_ignore_cert_errors" class="font-semibold text-yellow-800">Ignore certificate errors</label>
+                    <p class="text-xs text-yellow-700">Ignore TLS certificate validation errors (not recommended).</p>
+                </div>
+                <label class="theme-switch">
+                    <input type="checkbox" id="smtp_ignore_cert_errors" name="smtp_ignore_cert_errors" {% if config.smtp_ignore_cert_errors %}checked{% endif %}>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="flex flex-col sm:flex-row gap-4 pt-4 border-t border-gray-200">
+                <button type="submit" name="save_settings"
+                        class="w-full sm:w-auto flex-grow bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition duration-300 ease-in-out">
+                    Save
+                </button>
+                <button type="submit" name="test_email"
+                        class="w-full sm:w-auto flex-grow bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition duration-300 ease-in-out">
+                    Send Test Email and Save
+                </button>
+            </div>
+        </form>
+        
+        <div class="mt-8 text-center">
+            <a href="{{ url_for('admin.admin_dashboard') }}"
+               class="inline-block bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out">
+                Back to Admin Dashboard
+            </a>
+        </div>
+    </div>
+
+    <script>
+        window.appConfig = {
+            isSpaPage: false,
+            loggedInUsername: null,
+            isCurrentUserAdmin: true
+        };
+    </script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+        <!-- PWA Support -->
+    <script src="{{ url_for('static', filename='js/pwa.js') }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const flashMessages = {{ get_flashed_messages(with_categories=true) | tojson | safe }};
+            
+            if (flashMessages && flashMessages.length > 0) {
+                setTimeout(() => {
+                    flashMessages.forEach(([category, message]) => {
+                        const typeMap = {
+                            'success': 'success',
+                            'error': 'error',
+                            'danger': 'error',
+                            'warning': 'warning',
+                            'info': 'info',
+                            'message': 'info'
+                        };
+                        
+                        const toastType = typeMap[category] || 'info';
+                        
+                        if (App.Toast && typeof App.Toast.show === 'function') {
+                            App.Toast.show(message, toastType);
+                        }
+                    });
+                }, 100);
+            }
+        });
+        
+        App.initCore();
+    </script>
+</body>
+</html>
+

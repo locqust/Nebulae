@@ -1,5 +1,5 @@
 -- Migration: Add auth throttling to slow down online password / 2FA guessing
--- Version: 009
+-- Version: 010
 --
 -- Deliberately NOT an account lockout. Each row is a single failed attempt;
 -- utils/throttle.py counts recent rows and imposes an escalating cooldown that
