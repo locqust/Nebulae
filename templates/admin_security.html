@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#3b82f6" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#1e3a8a" media="(prefers-color-scheme: dark)">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Nebulae">
+
+    <!-- PWA Icons -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192x192.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192x192.png') }}">
+    <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='icons/icon-512x512.png') }}">
+    <title>Login Security - Admin</title>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+
+    <!-- Preload critical CSS -->
+    <link rel="preload" href="{{ url_for('static', filename='css/style.css') }}" as="style">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="flex flex-col min-h-screen items-center justify-center py-8 px-4 bg-cover bg-center bg-no-repeat bg-fixed backdrop-blur-sm" style="background-image: url('{{ url_for('static', filename='images/branding/background_1920x1080.png') }}');">
+    <!-- Dark overlay for better readability -->
+    <div class="fixed inset-0 bg-black/30 -z-10"></div>
+    <!-- Toast Container (required for notifications) -->
+    <div id="toast-container"></div>
+
+    <div class="max-w-5xl w-full bg-white p-8 rounded-lg shadow-xl border border-gray-200 min-h-[60vh] max-h-[calc(100vh-4rem)] overflow-y-auto">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-2">Login Security</h1>
+        <p class="text-center text-gray-600 mb-6">Accounts currently slowed down after repeated failed attempts.</p>
+
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <p class="text-sm text-blue-900">
+                <span class="font-semibold">Nothing here is ever permanently locked.</span>
+                Cooldowns grow with repeated failures (1 minute, then 5, then 15) and always
+                expire on their own &mdash; the longest anyone ever has to wait is 15 minutes.
+                Clearing below simply removes the wait immediately.
+            </p>
+        </div>
+
+        {% if active %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white border border-gray-200 rounded-lg">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Account</th>
+                        <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Type</th>
+                        <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Attempts</th>
+                        <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Time Left</th>
+                        <th class="py-3 px-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for item in active %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="py-3 px-4 text-sm text-gray-800 break-all">{{ item.identifier }}</td>
+                        <td class="py-3 px-4 text-sm">
+                            {% if item.scope == 'login' %}
+                                <span class="bg-yellow-100 text-yellow-800 py-1 px-2 rounded-full text-xs">Password</span>
+                            {% elif item.scope == 'twofa' %}
+                                <span class="bg-red-100 text-red-800 py-1 px-2 rounded-full text-xs">2FA code</span>
+                            {% else %}
+                                <span class="bg-blue-100 text-blue-800 py-1 px-2 rounded-full text-xs">Password reset</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-4 text-sm text-gray-800">{{ item.attempts }}</td>
+                        <td class="py-3 px-4 text-sm text-gray-800">{{ item.wait_text }}</td>
+                        <td class="py-3 px-4 text-right">
+                            <form action="{{ url_for('admin.admin_clear_throttle') }}" method="POST" class="inline">
+                                <input type="hidden" name="scope" value="{{ item.scope }}">
+                                <input type="hidden" name="identifier" value="{{ item.identifier }}">
+                                <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-1 px-3 rounded-lg text-sm shadow transition duration-300">
+                                    Clear
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mt-6 text-center">
+            <form action="{{ url_for('admin.admin_clear_throttle') }}" method="POST" class="inline"
+                  onsubmit="return confirm('Clear every active cooldown on this node?');">
+                <input type="hidden" name="scope" value="__all__">
+                <button type="submit" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300">
+                    Clear All Cooldowns
+                </button>
+            </form>
+        </div>
+        {% else %}
+        <div class="text-center py-12">
+            <svg class="w-16 h-16 mx-auto text-green-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <p class="text-lg font-semibold text-gray-700">No active cooldowns</p>
+            <p class="text-sm text-gray-500 mt-1">Nobody is currently being slowed down.</p>
+        </div>
+        {% endif %}
+
+        <div class="mt-8 text-center">
+            <a href="{{ url_for('admin.admin_dashboard') }}" class="inline-block bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out">
+                Back to Admin Dashboard
+            </a>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <!-- PWA Support -->
+    <script src="{{ url_for('static', filename='js/pwa.js') }}"></script>
+    <script>
+        window.appConfig = {
+            isSpaPage: false,
+            loggedInUsername: null,
+            isCurrentUserAdmin: true
+        };
+    </script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const flashMessages = {{ get_flashed_messages(with_categories=true) | tojson | safe }};
+
+            if (flashMessages && flashMessages.length > 0) {
+                setTimeout(() => {
+                    flashMessages.forEach(([category, message]) => {
+                        const typeMap = {
+                            'success': 'success',
+                            'error': 'error',
+                            'danger': 'error',
+                            'warning': 'warning',
+                            'info': 'info',
+                            'message': 'info'
+                        };
+                        const toastType = typeMap[category] || 'info';
+                        if (App.Toast && typeof App.Toast.show === 'function') {
+                            App.Toast.show(message, toastType);
+                        }
+                    });
+                }, 100);
+            }
+        });
+
+        App.initCore();
+    </script>
+</body>
+</html>

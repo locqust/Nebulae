@@ -827,3 +827,41 @@ def remove_parent_from_child():
         return jsonify({'message': message}), 200
     else:
         return jsonify({'error': message}), 400
+
+
+# =============================================================================
+# LOGIN SECURITY (auth throttling)
+# =============================================================================
+
+@admin_bp.route('/admin/security')
+def admin_security():
+    """
+    Shows accounts currently in an auth cooldown, with a way to release them.
+
+    Cooldowns always expire on their own (15 minutes at worst), so this screen
+    is a convenience rather than the only way out - which is deliberate: an
+    admin who is themselves throttled can simply wait.
+    """
+    from utils import throttle
+    active = throttle.list_active()
+    return render_template('admin_security.html', active=active)
+
+
+@admin_bp.route('/admin/security/clear', methods=['POST'])
+def admin_clear_throttle():
+    """Release one cooldown, or all of them when scope is __all__."""
+    from utils import throttle
+
+    scope = request.form.get('scope')
+    identifier = request.form.get('identifier')
+
+    if scope == '__all__':
+        removed = throttle.clear_all()
+        flash(f'Cleared all login cooldowns ({removed} recorded attempts removed).', 'success')
+    elif scope in throttle.POLICIES and identifier:
+        throttle.clear(scope, identifier)
+        flash(f'Cleared the {scope} cooldown for {identifier}.', 'success')
+    else:
+        flash('Nothing to clear.', 'warning')
+
+    return redirect(url_for('admin.admin_security'))

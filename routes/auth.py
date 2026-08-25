@@ -9,6 +9,7 @@ from db_queries.users import (get_user_by_username, create_user_session, delete_
 from utils.auth import check_password, hash_password, is_legacy_hash
 from utils.email_utils import send_email
 from utils.password_validation import validate_password, get_password_requirements_text
+from utils import throttle
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -23,15 +24,32 @@ def login():
         otp_code = request.form.get('otp_code', '').strip()
 
         user = get_user_by_username(username)
-        
+
+        # THROTTLE: keyed on the submitted username, whether or not it exists,
+        # so a throttled response never reveals which accounts are real.
+        wait = throttle.seconds_remaining('login', username)
+        if wait:
+            flash(f'Too many failed attempts. Please try again in {throttle.describe_wait(wait)}.', 'danger')
+            return render_template('login.html')
+
         # Check if this is a 2FA verification attempt (from login_2fa.html)
         if otp_code and 'pending_2fa_user_id' in session:
             # User is attempting 2FA verification - skip password check
             from db_queries.two_factor import get_2fa_settings, update_2fa_last_used, verify_backup_code
             import pyotp
-            
-            # Verify this is the same user
-            if session['pending_2fa_user_id'] != user['id']:
+
+            # THROTTLE: exhausting 2FA attempts also drops the pending state, so
+            # the attacker has to clear the (throttled) password step again.
+            twofa_wait = throttle.seconds_remaining('twofa', username)
+            if twofa_wait:
+                session.pop('pending_2fa_user_id', None)
+                session.pop('pending_2fa_username', None)
+                flash(f'Too many incorrect codes. Please sign in again in {throttle.describe_wait(twofa_wait)}.', 'danger')
+                return redirect(url_for('auth.login'))
+
+            # BUGFIX: user is None when the submitted username does not exist,
+            # which made the comparison below raise TypeError (a 500).
+            if not user or session['pending_2fa_user_id'] != user['id']:
                 flash('Invalid authentication attempt', 'danger')
                 session.pop('pending_2fa_user_id', None)
                 session.pop('pending_2fa_username', None)
@@ -51,9 +69,13 @@ def login():
                     flash('Backup code used successfully. Consider regenerating backup codes in settings.', 'warning')
                     # Backup code verified - continue to login completion
                 else:
+                    throttle.record_attempt('twofa', username)
                     flash('Invalid authentication code', 'danger')
                     return render_template('login_2fa.html', username=username)
             
+            # Code accepted - release the 2FA throttle for this account.
+            throttle.clear('twofa', username)
+
             # Clear pending 2FA session data
             session.pop('pending_2fa_user_id', None)
             session.pop('pending_2fa_username', None)
@@ -84,10 +106,13 @@ def login():
             
         else:
             # Invalid username or password
+            throttle.record_attempt('login', username)
             flash('Invalid username or password', 'danger')
             return render_template('login.html')
         
         # Login completion (reached after password check OR successful 2FA)
+        throttle.clear('login', username)
+
         session.clear()
         session['username'] = username
         session['is_admin'] = (user['user_type'] == 'admin')
@@ -149,7 +174,14 @@ def forgot_password():
     """
     if request.method == 'POST':
         email = request.form.get('email')
-        user = get_user_by_email(email)
+
+        # THROTTLE: reset requests cost outbound email and issue a valid token,
+        # so they are capped per address. When capped we fall through silently
+        # to the same generic message, which avoids confirming the address.
+        reset_wait = throttle.seconds_remaining('reset', email)
+        user = None if reset_wait else get_user_by_email(email)
+        if not reset_wait:
+            throttle.record_attempt('reset', email)
 
         if user:
             # Generate a password reset token
