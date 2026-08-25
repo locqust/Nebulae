@@ -1,8 +1,11 @@
 # routes/auth.py
 import uuid
+import hashlib
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app
-from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadTimeSignature
-from db_queries.users import get_user_by_username, create_user_session, delete_session_by_id, get_user_by_email, update_user_password_by_id
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature, BadData
+from db_queries.users import (get_user_by_username, create_user_session, delete_session_by_id,
+                              get_user_by_email, update_user_password_by_id,
+                              delete_all_sessions_for_user)
 from utils.auth import check_password, hash_password, is_legacy_hash
 from utils.email_utils import send_email
 from utils.password_validation import validate_password, get_password_requirements_text
@@ -124,6 +127,20 @@ def logout():
     flash('You have been logged out.', 'info')
     return redirect(url_for('main.index'))
 
+def _password_fingerprint(password_hash):
+    """
+    Short digest of the stored password hash, embedded in reset tokens.
+
+    NOTE: this is a fingerprint of an already-hashed value, NOT password
+    storage - utils.auth handles that with scrypt. SHA-256 is fine here.
+
+    Binding the token to the hash makes the link single-use: completing a
+    reset replaces the hash, so the fingerprint stops matching and the link
+    (plus any older outstanding links) immediately stops working.
+    """
+    return hashlib.sha256((password_hash or '').encode()).hexdigest()[:16]
+
+
 @auth_bp.route('/forgot_password', methods=['GET', 'POST'])
 def forgot_password():
     """
@@ -137,7 +154,10 @@ def forgot_password():
         if user:
             # Generate a password reset token
             s = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
-            token = s.dumps(user['email'], salt='password-reset-salt')
+            token = s.dumps(
+                {'email': user['email'], 'fp': _password_fingerprint(user['password'])},
+                salt='password-reset-salt'
+            )
 
             # Create the reset link
             reset_url = url_for('auth.reset_password', token=token, _external=True)
@@ -162,9 +182,30 @@ def reset_password(token):
     s = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
     try:
         # The token is valid for 1800 seconds (30 minutes)
-        email = s.loads(token, salt='password-reset-salt', max_age=1800)
-    except (SignatureExpired, BadTimeSignature):
+        data = s.loads(token, salt='password-reset-salt', max_age=1800)
+    except SignatureExpired:
+        flash('The password reset link has expired. Please request a new one.', 'danger')
+        return redirect(url_for('auth.forgot_password'))
+    except (BadSignature, BadData):
+        # BUGFIX: a malformed or truncated link raises BadSignature, which the
+        # previous handler did not catch - it produced a 500 instead of this.
         flash('The password reset link is invalid or has expired.', 'danger')
+        return redirect(url_for('auth.forgot_password'))
+
+    # Tokens issued before this change were a bare email string. They are only
+    # valid for 30 minutes anyway, so ask for a fresh one rather than honouring
+    # a format that has no single-use protection.
+    if not isinstance(data, dict):
+        flash('The password reset link is invalid or has expired. Please request a new one.', 'danger')
+        return redirect(url_for('auth.forgot_password'))
+
+    user = get_user_by_email(data.get('email'))
+
+    # SECURITY: reject a token whose embedded fingerprint no longer matches the
+    # stored hash. This is what makes the link single-use, and it is checked on
+    # GET too so a spent link never even renders the form.
+    if not user or data.get('fp') != _password_fingerprint(user['password']):
+        flash('This password reset link is no longer valid. It may already have been used.', 'danger')
         return redirect(url_for('auth.forgot_password'))
 
     if request.method == 'POST':
@@ -181,13 +222,15 @@ def reset_password(token):
             flash(error_message, 'danger')
             return render_template('reset_password.html', token=token)
 
-        user = get_user_by_email(email)
-        if user:
-            update_user_password_by_id(user['id'], password)
-            flash('Your password has been reset successfully. You can now log in.', 'success')
-            return redirect(url_for('auth.login'))
-        else:
-            flash('User not found.', 'danger')
-            return redirect(url_for('auth.login'))
+        update_user_password_by_id(user['id'], password)
+
+        # SECURITY: a reset is often a response to a compromise, so drop every
+        # existing session. Without this, a thief holding a stolen session
+        # cookie stays logged in after the legitimate owner resets.
+        delete_all_sessions_for_user(user['id'])
+        session.clear()
+
+        flash('Your password has been reset successfully. You can now log in.', 'success')
+        return redirect(url_for('auth.login'))
 
     return render_template('reset_password.html', token=token)
