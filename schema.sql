@@ -688,4 +688,20 @@ CREATE TABLE IF NOT EXISTS user_shortcuts (
 
 CREATE INDEX IF NOT EXISTS idx_user_shortcuts_user ON user_shortcuts(user_id);
 
+-- Auth throttling — slows online password / 2FA guessing (see utils/throttle.py)
+-- Each row is one failed attempt; escalating cooldowns are derived by counting
+-- recent rows. Deliberately not a lockout: cooldowns always expire on their own.
+CREATE TABLE IF NOT EXISTS auth_throttle (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scope TEXT NOT NULL,          -- 'login' | 'twofa' | 'reset'
+    identifier TEXT NOT NULL,     -- lowercased username / email, or 'ip:x.x.x.x'
+    failed_at INTEGER NOT NULL    -- unix timestamp
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_throttle_lookup
+    ON auth_throttle(scope, identifier, failed_at);
+
+CREATE INDEX IF NOT EXISTS idx_auth_throttle_cleanup
+    ON auth_throttle(failed_at);
+
 
