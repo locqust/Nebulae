@@ -940,6 +940,15 @@ def get_posts_for_group(group_puid, viewer_user_id, is_member, viewer_is_admin, 
     exclusions = []
     exclusion_params = []
 
+    # DELIBERATE: group and node admins are exempt from block filtering here.
+    # Moderating a group means being able to see everything posted in it,
+    # including posts by someone the admin has personally blocked - otherwise
+    # blocking a member would quietly create content you are responsible for
+    # but cannot see. Ordinary members get the full block treatment below.
+    #
+    # Consequence to be aware of: if you are an admin of a group, posts from
+    # people you have blocked WILL still appear on that group's wall. They stay
+    # hidden everywhere else (main feed, profiles, events).
     if viewer_user_id and not viewer_is_admin:
         block_cutoffs = dict(get_who_blocked_user(viewer_user_id))
         block_cutoffs.update(get_users_i_blocked(viewer_user_id))

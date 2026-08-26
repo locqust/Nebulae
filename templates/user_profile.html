@@ -333,7 +333,7 @@
                                     </form>
                                     {% else %}
                                     <form action="{% if viewer_home_url %}{{ viewer_home_url }}{{ url_for('friends.block_friend_route', puid=profile_user.puid) }}{% else %}{{ url_for('friends.block_friend_route', puid=profile_user.puid) }}{% endif %}" method="post" onsubmit="event.preventDefault();">
-                                        <button type="button" onclick="confirmFormSubmission(this.closest('form'), 'Are you sure you want to block {{ profile_user.display_name | js_string }}?')" class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg text-sm inline-flex items-center justify-center gap-2">
+                                        <button type="button" onclick="confirmFormSubmission(this.closest('form'), 'Block {{ (profile_user.display_name or profile_user.username) | js_string }}? You will not see anything they post from now on, and they will not see anything you post. Posts either of you made before now stay visible. To remove a specific post, use Hide this post instead.')" class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg text-sm inline-flex items-center justify-center gap-2">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
                                             </svg>

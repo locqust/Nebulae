@@ -325,7 +325,7 @@
                                 </button>
                             </form>
                             <form action="{% if viewer_home_url %}{{ viewer_home_url }}{{ url_for('friends.block_friend_route', puid=original_post.author.puid) }}{% else %}{{ url_for('friends.block_friend_route', puid=original_post.author.puid) }}{% endif %}" method="POST" onsubmit="event.preventDefault();">
-                                <button type="button" onclick="confirmFormSubmission(this.closest('form'), 'Are you sure you want to block {{ original_post.author.display_name or original_post.author.username | js_string }}? You will no longer see their posts and they will not be able to interact with your content.')" class="text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm">
+                                <button type="button" onclick="confirmFormSubmission(this.closest('form'), 'Block {{ (original_post.author.display_name or original_post.author.username) | js_string }}? You will not see anything they post from now on, and they will not see anything you post. Posts either of you made before now stay visible. To remove a specific post, use Hide this post instead.')" class="text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm">
                                     <span class="inline-flex items-center gap-2">
                                         <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
                                             <path fill-rule="evenodd" 

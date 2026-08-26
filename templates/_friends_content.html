@@ -173,7 +173,7 @@
                                         </form>
                                     {% else %}
                                         <form action="{{ url_for('friends.block_friend_route', puid=friend.puid) }}" method="POST" onsubmit="event.preventDefault();">
-                                            <button type="button" onclick="confirmFormSubmission(this.closest('form'), 'Are you sure you want to block {{ friend.display_name or friend.username | js_string }}?')" class="text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm">
+                                            <button type="button" onclick="confirmFormSubmission(this.closest('form'), 'Block {{ (friend.display_name or friend.username) | js_string }}? You will not see anything they post from now on, and they will not see anything you post. Posts either of you made before now stay visible. To remove a specific post, use Hide this post instead.')" class="text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm">
                                                 <span class="inline-flex items-center gap-2">
                                                     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
@@ -396,9 +396,9 @@
                                 {% endif %}
                             </div>
                             <div style="word-wrap: break-word; overflow-wrap: break-word;">
-                                <p class="name-link text-lg" style="white-space: normal;">
+                                <a href="{{ url_for('main.user_profile', puid=blocked.puid) }}" class="name-link text-lg block hover:underline" style="white-space: normal;">
                                     {{ blocked.display_name if blocked.display_name else blocked.username }}
-                                </p>
+                                </a>
                                 <p class="text-sm secondary-text">Blocked since: <span class="utc-timestamp" data-timestamp="{{ blocked.blocked_at }}">{{ blocked.blocked_at | format_timestamp }}</span></p>
                             </div>
                         </div>
