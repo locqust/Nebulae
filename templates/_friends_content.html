@@ -162,7 +162,7 @@
 
                                     {% if friend.is_blocked %}
                                         <form action="{{ url_for('friends.unblock_friend_route', puid=friend.puid) }}" method="POST" onsubmit="event.preventDefault();">
-                                            <button type="button" onclick="confirmFormSubmission(this.closest('form'), 'Are you sure you want to unblock {{ friend.display_name or friend.username | js_string }}?')" class="text-green-600 dark:text-green-400 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm">
+                                            <button type="button" onclick="confirmFormSubmission(this.closest('form'), 'Are you sure you want to unblock {{ (friend.display_name or friend.username) | js_string }}?')" class="text-green-600 dark:text-green-400 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm">
                                                 <span class="inline-flex items-center gap-2">
                                                     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -185,7 +185,7 @@
                                     {% endif %}
 
                                     <form method="post" action="{{ url_for('friends.unfriend_route', puid=friend.puid) }}" onsubmit="event.preventDefault();">
-                                        <button type="button" onclick="confirmFormSubmission(this.closest('form'), 'Are you sure you want to unfriend {{ friend.display_name or friend.username | js_string }}?')" class="text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm">
+                                        <button type="button" onclick="confirmFormSubmission(this.closest('form'), 'Are you sure you want to unfriend {{ (friend.display_name or friend.username) | js_string }}?')" class="text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left px-4 py-2 text-sm">
                                             <span class="inline-flex items-center gap-2">
                                                 <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zM21 12h-6"></path>

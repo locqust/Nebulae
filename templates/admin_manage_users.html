@@ -16,13 +16,17 @@
     <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192x192.png') }}">
     <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='icons/icon-512x512.png') }}">
     <title>Manage Users - Admin</title>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
 
     <!-- Preload critical CSS -->
     <link rel="preload" href="{{ url_for('static', filename='css/style.css') }}" as="style">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Custom CSS -->
-    <!-- Local styles (no CDNs - see scripts/build-css.sh) -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/inter.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body class="flex flex-col min-h-screen items-center justify-center py-8 px-4 bg-cover bg-center bg-no-repeat bg-fixed backdrop-blur-sm" style="background-image: url('{{ url_for('static', filename='images/branding/background_1920x1080.png') }}');">
@@ -95,12 +99,12 @@
                         </td>
                         <td class="py-3 px-3 text-center relative">
                             <div class="inline-block text-left">
-                                <button type="button" class="inline-flex justify-center rounded-md px-2 py-1 text-sm font-medium text-gray-700 hover:bg-gray-100 focus:outline-none" id="options-menu-{{ user.username }}" aria-haspopup="true" aria-expanded="true" onclick="toggleDropdown(event, 'dropdown-menu-{{ user.username }}')">
+                                <button type="button" class="inline-flex justify-center rounded-md px-2 py-1 text-sm font-medium text-gray-700 hover:bg-gray-100 focus:outline-none" id="options-menu-{{ user.puid }}" aria-haspopup="true" aria-expanded="true" onclick="toggleDropdown(event, 'dropdown-menu-{{ user.puid }}')">
                                     <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                         <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
                                     </svg>
                                 </button>
-                                <div class="dropdown-menu fixed mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50" role="menu" aria-orientation="vertical" aria-labelledby="options-menu-{{ user.username }}" id="dropdown-menu-{{ user.username }}" style="display: none;">
+                                <div class="dropdown-menu fixed mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50" role="menu" aria-orientation="vertical" aria-labelledby="options-menu-{{ user.puid }}" id="dropdown-menu-{{ user.puid }}" style="display: none;">
                                     <div class="py-1" role="none">
                                         <button type="button" 
                                         class="text-gray-700 block w-full text-left px-4 py-2 text-sm hover:bg-gray-100" 
