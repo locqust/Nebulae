@@ -649,32 +649,61 @@ def get_posts_for_event(event_id, viewer_user_puid=None, page=1, limit=20):
     from .posts import get_post_by_cuid
     
     offset = (page - 1) * limit
-    
-    # Query with LIMIT and OFFSET
-    cursor.execute(
-        "SELECT cuid FROM posts WHERE event_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?",
-        (event_id, limit, offset)  # Pass all three params
-    )
-    post_cuids = [row['cuid'] for row in cursor.fetchall()]
-    
-    final_posts = []
 
-    # NEW: Get viewer_user_id for filtering
+    # Resolve the viewer first - the exclusions below need their user id.
     viewer_user_id = None
     if viewer_user_puid:
         from .users import get_user_by_puid
         viewer_user = get_user_by_puid(viewer_user_puid)
         if viewer_user:
             viewer_user_id = viewer_user['id']
+
+    # BUGFIX: event timelines applied no block filtering in either direction.
+    # Same rule as the main feed and group walls: posts made AFTER a block are
+    # hidden, earlier ones stay. Hidden posts move into SQL too, so LIMIT
+    # returns a full page instead of however many survived the Python filter.
+    exclusions = []
+    exclusion_params = []
+
+    if viewer_user_id:
+        from .friends import get_who_blocked_user, get_users_i_blocked
+        block_cutoffs = dict(get_who_blocked_user(viewer_user_id))
+        block_cutoffs.update(get_users_i_blocked(viewer_user_id))
+        if block_cutoffs:
+            id_ph = ','.join('?' * len(block_cutoffs))
+            cursor.execute(f"SELECT id, puid FROM users WHERE id IN ({id_ph})",
+                           list(block_cutoffs.keys()))
+            id_to_puid = {row['id']: row['puid'] for row in cursor.fetchall()}
+            for blocked_id, blocked_at in block_cutoffs.items():
+                blocked_puid = id_to_puid.get(blocked_id)
+                if not blocked_puid:
+                    continue
+                exclusions.append("NOT (author_puid = ? AND timestamp > ?)")
+                exclusion_params.append(blocked_puid)
+                exclusion_params.append(blocked_at.strftime('%Y-%m-%d %H:%M:%S'))
+
+        exclusions.append(
+            "id NOT IN (SELECT content_id FROM hidden_content "
+            "WHERE user_id = ? AND content_type = 'post')"
+        )
+        exclusion_params.append(viewer_user_id)
+
+    exclusion_sql = (' AND ' + ' AND '.join(exclusions)) if exclusions else ''
+
+    # Query with LIMIT and OFFSET
+    cursor.execute(
+        f"SELECT cuid FROM posts WHERE event_id = ?{exclusion_sql} "
+        f"ORDER BY timestamp DESC LIMIT ? OFFSET ?",
+        [event_id] + exclusion_params + [limit, offset]
+    )
+    post_cuids = [row['cuid'] for row in cursor.fetchall()]
+
+    final_posts = []
             
     for cuid in post_cuids:
         post = get_post_by_cuid(cuid, viewer_user_puid=viewer_user_puid)
         if post:
-            # NEW: Skip hidden posts
-            if viewer_user_id:
-                from .posts import is_post_hidden_for_user
-                if is_post_hidden_for_user(viewer_user_id, post['id']):
-                    continue
+            # Hidden and blocked posts are excluded in SQL above.
             final_posts.append(post)
     return final_posts
 

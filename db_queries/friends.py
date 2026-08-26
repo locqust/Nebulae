@@ -357,6 +357,27 @@ def get_blocked_friends_list(user_id):
     rows = cursor.fetchall()
     return [dict(row) for row in rows]
 
+def get_users_i_blocked(user_id):
+    """
+    Returns {friend_id: blocked_at} for users this user has blocked.
+
+    The exact mirror of get_who_blocked_user() below. Both directions of a
+    block use the same rule: posts made AFTER the block are hidden, anything
+    from before it stays visible.
+
+    get_blocked_friends() returns the same set without timestamps and is used
+    where the block time doesn't matter.
+    """
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        "SELECT friend_id, blocked_at FROM friend_relationships "
+        "WHERE user_id = ? AND is_blocked = TRUE AND blocked_at IS NOT NULL",
+        (user_id,)
+    )
+    return {row['friend_id']: datetime.strptime(row['blocked_at'].split('.')[0], '%Y-%m-%d %H:%M:%S')
+            for row in cursor.fetchall()}
+
 def get_who_blocked_user(user_id):
     """Returns a dictionary of users who have blocked the given user and when."""
     db = get_db()

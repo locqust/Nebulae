@@ -9,7 +9,8 @@ from utils.text_processing import extract_mentions, extract_everyone_mention
 from .users import get_user_by_id, get_user_by_puid
 from .comments import get_comments_for_post, filter_comments
 from .notifications import create_notification
-from .friends import get_snoozed_friends, get_who_blocked_user, is_friends_with, get_friend_relationship, get_all_friends_puid
+from .friends import (get_snoozed_friends, get_who_blocked_user, get_users_i_blocked,
+                      is_friends_with, get_friend_relationship, get_all_friends_puid)
 # CIRCULAR IMPORT FIX: Import federation functions inside functions where needed
 from .groups import get_user_group_ids, get_group_by_puid, get_group_members
 # NEW: Import follower queries
@@ -742,6 +743,7 @@ def get_posts_for_feed(current_user_id=None, current_user_is_admin=False, filter
 
     snoozed_friend_ids = set()
     viewer_blocked_by_map = {}
+    blocked_by_me_map = {}
     member_of_group_ids = []
     followed_page_puids = []
 
@@ -754,6 +756,16 @@ def get_posts_for_feed(current_user_id=None, current_user_is_admin=False, filter
 
         snoozed_friend_ids = get_snoozed_friends(current_user_id)
         viewer_blocked_by_map = get_who_blocked_user(current_user_id)
+        # BUGFIX: the feed only ever consulted get_who_blocked_user(), i.e.
+        # "people who blocked ME". Nothing consulted the other direction, so
+        # blocking someone hid your posts from them but left their posts in
+        # your feed - despite the UI promising both.
+        #
+        # Both directions now use the same rule: posts made AFTER the block are
+        # hidden, anything from before stays. A block is a line drawn at a point
+        # in time, not a retroactive erasure of shared history. (To get rid of
+        # the post that prompted the block, hide it - that's what hiding is for.)
+        blocked_by_me_map = get_users_i_blocked(current_user_id)
         member_of_group_ids = get_user_group_ids(current_user_id)
         followed_pages = get_following_pages(current_user_id)
         followed_page_puids = [page['puid'] for page in followed_pages]
@@ -824,27 +836,32 @@ def get_posts_for_feed(current_user_id=None, current_user_is_admin=False, filter
         )
         exclusion_params.append(current_user_id)
 
-    if not current_user_is_admin and (snoozed_friend_ids or viewer_blocked_by_map):
+    # Either direction of a block hides posts after blocked_at, so the two maps
+    # can be merged and handled by one set of clauses.
+    block_cutoffs = dict(viewer_blocked_by_map)
+    block_cutoffs.update(blocked_by_me_map)
+
+    if not current_user_is_admin and (snoozed_friend_ids or block_cutoffs):
         # Both sets are keyed by user id; the posts table stores author_puid.
-        wanted_ids = list(snoozed_friend_ids) + list(viewer_blocked_by_map.keys())
+        wanted_ids = list(snoozed_friend_ids) + list(block_cutoffs.keys())
         id_ph = ','.join('?' * len(wanted_ids))
         cursor.execute(f"SELECT id, puid FROM users WHERE id IN ({id_ph})", wanted_ids)
         id_to_puid = {row['id']: row['puid'] for row in cursor.fetchall()}
 
+        # Snooze hides everything by that author until it expires.
         snoozed_puids = [id_to_puid[i] for i in snoozed_friend_ids if i in id_to_puid]
         if snoozed_puids:
             ph = ','.join('?' * len(snoozed_puids))
             exclusions.append(f"p.author_puid NOT IN ({ph})")
             exclusion_params.extend(snoozed_puids)
 
-        # Someone who blocked this viewer hides only posts made AFTER the
-        # block; anything from before it stays visible, as it did previously.
-        for blocker_id, blocked_at in viewer_blocked_by_map.items():
-            blocker_puid = id_to_puid.get(blocker_id)
-            if not blocker_puid:
+        # A block in either direction hides only posts made AFTER it.
+        for blocked_id, blocked_at in block_cutoffs.items():
+            blocked_puid = id_to_puid.get(blocked_id)
+            if not blocked_puid:
                 continue
             exclusions.append("NOT (p.author_puid = ? AND p.timestamp > ?)")
-            exclusion_params.extend([blocker_puid, blocked_at.strftime('%Y-%m-%d %H:%M:%S')])
+            exclusion_params.extend([blocked_puid, blocked_at.strftime('%Y-%m-%d %H:%M:%S')])
 
     full_where = f"({where_clause})"
     if exclusions:
@@ -881,17 +898,17 @@ def get_posts_for_feed(current_user_id=None, current_user_is_admin=False, filter
         if not current_user_is_admin and author_id:
             if author_id in snoozed_friend_ids:
                 continue
-            if author_id in viewer_blocked_by_map:
-                blocked_at_ts = viewer_blocked_by_map[author_id]
+            if author_id in block_cutoffs:
+                blocked_at_ts = block_cutoffs[author_id]
                 post_timestamp_str = post['timestamp'].split('.')[0]
                 post_timestamp = datetime.strptime(post_timestamp_str, '%Y-%m-%d %H:%M:%S')
                 if post_timestamp > blocked_at_ts:
                     continue
 
         if post.get('is_repost') and post.get('original_post'):
-            post['original_post']['comments'] = filter_comments(post['original_post'].get('comments', []), snoozed_friend_ids, viewer_blocked_by_map)
+            post['original_post']['comments'] = filter_comments(post['original_post'].get('comments', []), snoozed_friend_ids, block_cutoffs)
         else:
-            post['comments'] = filter_comments(post.get('comments', []), snoozed_friend_ids, viewer_blocked_by_map)
+            post['comments'] = filter_comments(post.get('comments', []), snoozed_friend_ids, block_cutoffs)
 
         final_posts.append(post)
 
@@ -914,12 +931,48 @@ def get_posts_for_group(group_puid, viewer_user_id, is_member, viewer_is_admin, 
 
     placeholders = ','.join('?' * len(visible_privacy_levels))
     offset = (page - 1) * limit
-    
+
+    # BUGFIX: group timelines applied no block filtering in either direction,
+    # so a blocked user's new posts still appeared in a shared group - and vice
+    # versa. Same rule as the main feed: posts made AFTER a block are hidden,
+    # earlier ones stay. Snooze is deliberately NOT applied here; you joined
+    # this group on purpose, and snooze is a feed-noise tool, not a safety one.
+    exclusions = []
+    exclusion_params = []
+
+    if viewer_user_id and not viewer_is_admin:
+        block_cutoffs = dict(get_who_blocked_user(viewer_user_id))
+        block_cutoffs.update(get_users_i_blocked(viewer_user_id))
+        if block_cutoffs:
+            id_ph = ','.join('?' * len(block_cutoffs))
+            cursor.execute(f"SELECT id, puid FROM users WHERE id IN ({id_ph})",
+                           list(block_cutoffs.keys()))
+            id_to_puid = {row['id']: row['puid'] for row in cursor.fetchall()}
+            for blocked_id, blocked_at in block_cutoffs.items():
+                blocked_puid = id_to_puid.get(blocked_id)
+                if not blocked_puid:
+                    continue
+                exclusions.append("NOT (author_puid = ? AND timestamp > ?)")
+                exclusion_params.append(blocked_puid)
+                exclusion_params.append(blocked_at.strftime('%Y-%m-%d %H:%M:%S'))
+
+    if viewer_user_id:
+        # Also moves the hidden-post check out of the per-post loop below,
+        # so LIMIT returns a full page instead of however many survived.
+        exclusions.append(
+            "id NOT IN (SELECT content_id FROM hidden_content "
+            "WHERE user_id = ? AND content_type = 'post')"
+        )
+        exclusion_params.append(viewer_user_id)
+
+    exclusion_sql = (' AND ' + ' AND '.join(exclusions)) if exclusions else ''
+
     # Build query with LIMIT and OFFSET
-    query = f"SELECT cuid FROM posts WHERE group_id = ? AND privacy_setting IN ({placeholders}) ORDER BY timestamp DESC LIMIT ? OFFSET ?"
-    
-    # Build params list: [group_id, privacy_levels..., limit, offset]
-    params = [group['id']] + list(visible_privacy_levels) + [limit, offset]
+    query = (f"SELECT cuid FROM posts WHERE group_id = ? AND privacy_setting IN ({placeholders})"
+             f"{exclusion_sql} ORDER BY timestamp DESC LIMIT ? OFFSET ?")
+
+    # Build params list: [group_id, privacy_levels..., exclusions..., limit, offset]
+    params = [group['id']] + list(visible_privacy_levels) + exclusion_params + [limit, offset]
     
     cursor.execute(query, params)
     post_cuids = [row['cuid'] for row in cursor.fetchall()]
@@ -935,9 +988,7 @@ def get_posts_for_group(group_puid, viewer_user_id, is_member, viewer_is_admin, 
     for cuid in post_cuids:
         post = get_post_by_cuid(cuid, viewer_user_puid=viewer_puid)
         if post:
-            # NEW: Skip hidden posts
-            if viewer_user_id and is_post_hidden_for_user(viewer_user_id, post['id']):
-                continue
+            # Hidden and blocked posts are excluded in SQL above.
             final_posts.append(post)
 
     return final_posts
@@ -1015,11 +1066,20 @@ def get_posts_for_profile_timeline(profile_user_puid, viewer_user_id, viewer_is_
             return [] # Should not happen, but a good safeguard.
 
     if profile_user_id and viewer_user_id:
-        block_info = get_friend_relationship(profile_user_id, viewer_user_id)
-        viewer_is_blocked = block_info and block_info['is_blocked']
-        if viewer_is_blocked and block_info.get('blocked_at'):
-            blocked_at_ts_str = block_info['blocked_at'].split('.')[0]
-            blocked_at_ts = datetime.strptime(blocked_at_ts_str, '%Y-%m-%d %H:%M:%S')
+        # BUGFIX: this only checked whether the PROFILE OWNER had blocked the
+        # VIEWER. If the viewer had blocked the profile owner, the owner's new
+        # posts still showed on their profile. Check both directions and take
+        # the earlier cutoff, so either block hides posts made after it.
+        cutoffs = []
+        for a, b in ((profile_user_id, viewer_user_id), (viewer_user_id, profile_user_id)):
+            info = get_friend_relationship(a, b)
+            if info and info['is_blocked']:
+                viewer_is_blocked = True
+                if info.get('blocked_at'):
+                    cutoffs.append(datetime.strptime(
+                        info['blocked_at'].split('.')[0], '%Y-%m-%d %H:%M:%S'))
+        if cutoffs:
+            blocked_at_ts = min(cutoffs)
 
     visible_privacy_levels = {'public'}
 
