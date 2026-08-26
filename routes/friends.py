@@ -1,4 +1,8 @@
 # routes/friends.py
+import logging
+
+logger = logging.getLogger(__name__)
+
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, current_app
 import sys
 import requests
@@ -62,7 +66,7 @@ def get_discoverable_users():
     local_profiles_to_process = []
 
     if search_term:
-        print(f"DEBUG: Searching local users for: {search_term}")
+        logger.debug(f"Searching local users for: {search_term}")
         local_profiles_to_process = search_discoverable_local_users(search_term, current_user_id)
     else:
         # Existing logic to fetch all local discoverable users when no search term
@@ -99,13 +103,13 @@ def get_discoverable_users():
             profile['node_nickname'] = 'Local'
             discoverable_profiles.append(profile)
             added_puids.add(profile['puid'])
-            print(f"DEBUG: Added local profile {profile['puid']} ({profile.get('display_name')})")
+            logger.debug(f"Added local profile {profile['puid']} ({profile.get('display_name')})")
 
     # --- Federated User Discovery (No Remote Search) ---
     # Only fetch remote users if there's NO search term
     if not search_term:
         connected_nodes = get_all_connected_nodes()
-        print(f"DEBUG: Found {len(connected_nodes)} connected nodes for discovery.")
+        logger.debug(f"Found {len(connected_nodes)} connected nodes for discovery.")
         for node in connected_nodes:
                 # Only discover users from FULL connections, not targeted subscriptions
             if node['status'] != 'connected' or not node['shared_secret']:
@@ -113,18 +117,18 @@ def get_discoverable_users():
             if node.get('connection_type') == 'targeted':
                 continue  # Skip targeted subscriptions for user discovery
 
-            print(f"DEBUG: Attempting to fetch all discoverable users from node {node['hostname']}")
+            logger.debug(f"Attempting to fetch all discoverable users from node {node['hostname']}")
             try:
                 insecure_mode = current_app.config.get('FEDERATION_INSECURE_MODE', False)
                 verify_ssl = not insecure_mode
                 endpoint = '/federation/api/v1/discover_users'
                 # --- REVERTED: No query parameters sent for remote discovery ---
                 remote_url = get_remote_node_api_url(node['hostname'], endpoint, insecure_mode)
-                print(f"DEBUG: Requesting URL: {remote_url}")
+                logger.debug(f"Requesting URL: {remote_url}")
                 # --- END REVERTED ---
 
                 if not local_node_hostname:
-                    print("ERROR: NODE_HOSTNAME is not configured. Federation calls will likely fail.")
+                    logger.error("NODE_HOSTNAME is not configured. Federation calls will likely fail.")
                     continue
 
                 request_body = b'' # GET request body is empty
@@ -134,7 +138,7 @@ def get_discoverable_users():
                 response = requests.get(remote_url, headers=headers, timeout=5, verify=verify_ssl)
                 response.raise_for_status()
                 remote_profiles_data = response.json()
-                print(f"DEBUG: Received from {node['hostname']}: {json.dumps(remote_profiles_data, indent=2)}")
+                logger.debug(f"Received from {node['hostname']}: {json.dumps(remote_profiles_data, indent=2)}")
 
                 profiles_list = []
                 if isinstance(remote_profiles_data, list):
@@ -142,27 +146,27 @@ def get_discoverable_users():
                 elif isinstance(remote_profiles_data, dict) and 'users' in remote_profiles_data and isinstance(remote_profiles_data['users'], list):
                     profiles_list = remote_profiles_data['users']
                 else:
-                    print(f"WARN: Unexpected response format from {node['hostname']}: {type(remote_profiles_data)}")
+                    logger.warning(f"Unexpected response format from {node['hostname']}: {type(remote_profiles_data)}")
 
-                print(f"DEBUG: Processing profiles_list (length {len(profiles_list)}) from {node['hostname']}")
+                logger.debug(f"Processing profiles_list (length {len(profiles_list)}) from {node['hostname']}")
 
                 for profile_data in profiles_list:
                     remote_profile_puid = profile_data.get('puid')
                     if not remote_profile_puid:
-                        print(f"WARN: Skipping profile data with missing PUID from {node['hostname']}")
+                        logger.warning(f"Skipping profile data with missing PUID from {node['hostname']}")
                         continue
 
                     if remote_profile_puid in added_puids:
-                        print(f"DEBUG: Skipping duplicate profile {remote_profile_puid} received from {node['hostname']}.")
+                        logger.debug(f"Skipping duplicate profile {remote_profile_puid} received from {node['hostname']}.")
                         continue
 
                     current_user_puid_obj = get_user_by_id(current_user_id)
                     current_user_puid = current_user_puid_obj['puid'] if current_user_puid_obj else None
 
                     if not current_user_puid:
-                         print("ERROR: Could not get PUID for current user. Skipping self-check.")
+                         logger.error("Could not get PUID for current user. Skipping self-check.")
                     elif remote_profile_puid == current_user_puid:
-                        print(f"DEBUG: Skipping own profile {remote_profile_puid} received from {node['hostname']}")
+                        logger.debug(f"Skipping own profile {remote_profile_puid} received from {node['hostname']}")
                         continue
                     
                     # --- FEDERATION FIX: Check for the received profile's origin hostname ---
@@ -172,15 +176,15 @@ def get_discoverable_users():
                     if origin_hostname == local_node_hostname:
                         continue
 
-                    print(f"DEBUG: Checking remote profile: {profile_data.get('display_name')} ({remote_profile_puid}) from {origin_hostname or node['hostname']}")
+                    logger.debug(f"Checking remote profile: {profile_data.get('display_name')} ({remote_profile_puid}) from {origin_hostname or node['hostname']}")
                     
                     # --- BUG FIX: Determine the correct local stub type ---
                     # If the incoming profile is a 'public_page', we save it as 'public_page'.
                     # If it's anything else (like 'user'), we save it as 'remote'.
                     remote_type = profile_data.get('user_type')
-                    print(f"DEBUG: Profile {profile_data.get('display_name')} has user_type: {remote_type}")
+                    logger.debug(f"Profile {profile_data.get('display_name')} has user_type: {remote_type}")
                     local_stub_type = 'public_page' if remote_type == 'public_page' else 'remote'
-                    print(f"DEBUG: Setting local_stub_type to: {local_stub_type}")
+                    logger.debug(f"Setting local_stub_type to: {local_stub_type}")
                     # --- END BUG FIX ---
 
                     remote_user_stub = get_or_create_remote_user(
@@ -205,23 +209,23 @@ def get_discoverable_users():
 
                     is_related = False
                     if remote_user_stub:
-                        print(f"DEBUG: Found/Created local record for {remote_profile_puid}. Type: {remote_user_stub['user_type']}")
+                        logger.debug(f"Found/Created local record for {remote_profile_puid}. Type: {remote_user_stub['user_type']}")
                         if remote_user_stub['user_type'] in ['user', 'remote', 'admin']:
                             friendship_status, _ = get_friendship_status(current_user_id, remote_user_stub['id'])
-                            print(f"DEBUG: Friendship status with {remote_profile_puid}: {friendship_status}")
+                            logger.debug(f"Friendship status with {remote_profile_puid}: {friendship_status}")
                             if friendship_status in ['friends', 'pending_sent', 'pending_received']: is_related = True
                         elif remote_user_stub['user_type'] == 'public_page':
                             is_following_status = is_following(current_user_id, remote_user_stub['id'])
-                            print(f"DEBUG: Following status with {remote_profile_puid}: {is_following_status}")
+                            logger.debug(f"Following status with {remote_profile_puid}: {is_following_status}")
                             if is_following_status: is_related = True
                     else:
-                        print(f"DEBUG: Could not get/create local record for {remote_profile_puid}.")
+                        logger.debug(f"Could not get/create local record for {remote_profile_puid}.")
 
-                    print(f"DEBUG: Profile {remote_profile_puid} is_related = {is_related}")
+                    logger.debug(f"Profile {remote_profile_puid} is_related = {is_related}")
 
                     # Skip if hidden by user
                     if remote_user_stub and remote_user_stub['id'] in hidden_ids:
-                        print(f"DEBUG: Skipping hidden profile {remote_profile_puid}.")
+                        logger.debug(f"Skipping hidden profile {remote_profile_puid}.")
                         continue
 
                     if not is_related:
@@ -233,18 +237,18 @@ def get_discoverable_users():
                         discoverable_profiles.append(profile_data)
                         added_puids.add(remote_profile_puid)
                         # Use the new variable here
-                        print(f"DEBUG: Added remote profile {remote_profile_puid} ({profile_data.get('display_name')}) from {effective_hostname} to discoverable list.")
+                        logger.debug(f"Added remote profile {remote_profile_puid} ({profile_data.get('display_name')}) from {effective_hostname} to discoverable list.")
                     else:
                         # Use the new variable here
-                        print(f"DEBUG: Skipping related profile {remote_profile_puid} from {effective_hostname}.")
+                        logger.debug(f"Skipping related profile {remote_profile_puid} from {effective_hostname}.")
 
             except requests.exceptions.RequestException as e:
-                print(f"ERROR: Could not fetch users from node {node['hostname']}: {e}")
+                logger.error(f"Could not fetch users from node {node['hostname']}: {e}")
             except Exception as e:
-                print(f"ERROR: An unexpected error occurred while fetching from {node['hostname']}: {e}")
-                traceback.print_exc()
+                logger.error(f"An unexpected error occurred while fetching from {node['hostname']}: {e}")
+                logger.exception("Unhandled exception")
 
-    print(f"DEBUG: Returning {len(discoverable_profiles)} discoverable profiles.")
+    logger.debug(f"Returning {len(discoverable_profiles)} discoverable profiles.")
     return jsonify(discoverable_profiles)
 
 
@@ -363,8 +367,8 @@ def send_friend_request_route(puid):
                 flash(response_data.get('message', 'Failed to send friend request.'), 'danger')
 
         except Exception as e:
-            print(f"ERROR sending remote friend request: {e}")
-            traceback.print_exc()
+            logger.error(f"ERROR sending remote friend request: {e}")
+            logger.exception("Unhandled exception")
             flash(f'Failed to send friend request: {str(e)}', 'danger')
 
         # FEDERATED VIEWER FIX: Check if referrer is from remote domain
@@ -459,12 +463,12 @@ def send_remote_request_proxy():
         return jsonify({'error': 'Could not identify sender.'}), 401
 
     # NEW: PARENTAL CONTROL CHECK - Intercept remote friend requests for users requiring approval
-    print(f"DEBUG: Checking parental approval for user {sender['username']} (ID: {sender['id']})")
+    logger.debug(f"Checking parental approval for user {sender['username']} (ID: {sender['id']})")
     from db_queries.parental_controls import requires_parental_approval, create_approval_request, get_all_parent_ids
     from db_queries.notifications import create_notification
     
     needs_approval = requires_parental_approval(sender['id'])
-    print(f"DEBUG: Requires approval: {needs_approval}")
+    logger.debug(f"Requires approval: {needs_approval}")
     
     if needs_approval:
         # Create approval request instead of sending directly
@@ -482,17 +486,17 @@ def send_remote_request_proxy():
             request_data
         )
         
-        print(f"DEBUG: Created approval request with ID: {approval_id}")
+        logger.debug(f"Created approval request with ID: {approval_id}")
         
         if approval_id:
             # Get ALL parents for notification (supports multiple parents)
             parent_ids = get_all_parent_ids(sender['id'])
-            print(f"DEBUG: Found {len(parent_ids)} parent(s) for user {sender['username']}: {parent_ids}")
+            logger.debug(f"Found {len(parent_ids)} parent(s) for user {sender['username']}: {parent_ids}")
             
             # Notify all parents
             for parent_id in parent_ids:
                 notification_id = create_notification(parent_id, sender['id'], 'parental_approval_needed')
-                print(f"DEBUG: Created notification {notification_id} for parent {parent_id}")
+                logger.debug(f"Created notification {notification_id} for parent {parent_id}")
             
             return jsonify({
                 'status': 'info', 
@@ -568,16 +572,16 @@ def send_remote_request_proxy():
             if remote_user:
                 send_friend_request_db(sender['id'], remote_user['id'])
             else:
-                print(f"WARN: Could not create local outgoing friend request record for remote user {target_puid}")
+                logger.warning(f"Could not create local outgoing friend request record for remote user {target_puid}")
 
         return jsonify(response_data), response.status_code
 
     except requests.exceptions.RequestException as e:
-        print(f"ERROR proxying friend request to {target_hostname}: {e}")
+        logger.error(f"ERROR proxying friend request to {target_hostname}: {e}")
         return jsonify({'error': f'Failed to connect to the remote node: {e}'}), 500
     except Exception as e:
-        print(f"ERROR in send_remote_request_proxy: {e}")
-        traceback.print_exc()
+        logger.error(f"ERROR in send_remote_request_proxy: {e}")
+        logger.exception("Unhandled exception")
         return jsonify({'error': 'An unexpected error occurred.'}), 500
 
 

@@ -1,4 +1,7 @@
 .tailwind/
 README-LOCALISE.md
-.scripts/build-css.sh
-./scripts/localise_assets.py
+scripts/build-css.sh
+scripts/localise_assets.py
+scripts/convert_prints.py
+*.bak
+*.pyc

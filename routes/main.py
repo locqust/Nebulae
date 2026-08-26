@@ -1,4 +1,8 @@
 # routes/main.py
+import logging
+
+logger = logging.getLogger(__name__)
+
 import os
 import json
 import base64
@@ -1206,7 +1210,7 @@ def create_post():
             flash('Failed to create post.', 'danger')
     except Exception as e:
         flash(f'An error occurred: {e}', 'danger')
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
 
     return redirect(request.referrer or url_for('main.index'))
 
@@ -1273,7 +1277,7 @@ def create_life_event():
             flash('Failed to create life event.', 'danger')
     except Exception as e:
         flash(f'An error occurred: {e}', 'danger')
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
 
     return redirect(url_for('main.user_profile', puid=current_user['puid']))
 
@@ -1321,7 +1325,7 @@ def repost_route(cuid):
             flash('Failed to share post.', 'danger')
     except Exception as e:
         flash(f'An error occurred while sharing the post: {e}', 'danger')
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
 
     return redirect(request.referrer or url_for('main.index'))
 
@@ -1394,7 +1398,7 @@ def edit_post(post_cuid):
         else:
             return jsonify({'error': 'Failed to update post in the database.'}), 500
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An unexpected error occurred: {e}'}), 500
 
 
@@ -1493,7 +1497,7 @@ def remove_tag_from_post_route(post_cuid):
         else:
             return jsonify({'error': 'Failed to remove tag'}), 400
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An error occurred: {e}'}), 500
 
 
@@ -1527,7 +1531,7 @@ def remove_mention_from_post_route(post_cuid):
         else:
             return jsonify({'error': 'Failed to remove mention'}), 400
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An error occurred: {e}'}), 500
 
 
@@ -1569,7 +1573,7 @@ def hide_post_route(post_cuid):
         else:
             return jsonify({'error': 'Failed to hide post'}), 400
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An error occurred: {e}'}), 500
 
 @main_bp.route('/update_media_alt_text/<int:media_id>', methods=['POST'])
@@ -1765,8 +1769,8 @@ def upload_media():
                 })
 
             except Exception as e:
-                print(f"Error uploading file {file.filename}: {e}")
-                traceback.print_exc()
+                logger.error(f"Error uploading file {file.filename}: {e}")
+                logger.exception("Unhandled exception")
                 continue
 
     if not uploaded_media:
@@ -1817,7 +1821,7 @@ def upload_profile_picture():
 
         except Exception as e:
             flash(f'Error processing adjusted image: {e}', 'danger')
-            traceback.print_exc()
+            logger.exception("Unhandled exception")
             return redirect(url_for('main.user_profile', puid=user_data['puid']))
 
     if profile_picture_path:
@@ -1881,7 +1885,7 @@ def upload_cover_picture():
         return jsonify({'success': True, 'cover_url': cover_url}), 200
  
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'Error processing cover image: {e}'}), 500
  
 
@@ -2011,7 +2015,7 @@ def user_profile(puid):
             return redirect(request.referrer or url_for('main.index'))
         except Exception as e:
             flash(f"An error occurred while trying to view the remote profile: {e}", "danger")
-            traceback.print_exc()
+            logger.exception("Unhandled exception")
             return redirect(request.referrer or url_for('main.index'))
 
     current_viewer_id = None
@@ -2222,7 +2226,7 @@ def public_page_profile(puid):
             return redirect(request.referrer or url_for('main.index'))
         except Exception as e:
             flash(f"An error occurred while trying to view the remote page: {e}", "danger")
-            traceback.print_exc()
+            logger.exception("Unhandled exception")
             return redirect(request.referrer or url_for('main.index'))
 
     current_viewer_id = None
@@ -2394,7 +2398,7 @@ def follow_remote_proxy():
     node = get_node_by_hostname(target_hostname)
     if not node or node['status'] != 'connected' or not node['shared_secret']:
         # No connection exists, create a targeted subscription
-        print(f"No connection to {target_hostname}, creating targeted subscription for page {target_display_name}")
+        logger.info(f"No connection to {target_hostname}, creating targeted subscription for page {target_display_name}")
         node = get_or_create_targeted_subscription(
             target_hostname,
             'public_page',
@@ -2457,12 +2461,12 @@ def follow_remote_proxy():
         return jsonify(response.json()), response.status_code
 
     except requests.exceptions.RequestException as e:
-        print(f"ERROR proxying follow request to {target_hostname}: {e}")
+        logger.error(f"ERROR proxying follow request to {target_hostname}: {e}")
         # We already followed locally, so this is not a critical failure for the user
         return jsonify({'status': 'success', 'message': 'Followed successfully (pending remote confirmation).'}), 200
     except Exception as e:
-        print(f"ERROR in follow_remote_proxy: {e}")
-        traceback.print_exc()
+        logger.error(f"ERROR in follow_remote_proxy: {e}")
+        logger.exception("Unhandled exception")
         return jsonify({'error': 'An unexpected error occurred.'}), 500
 
 

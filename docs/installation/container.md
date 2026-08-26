@@ -35,6 +35,14 @@ environment:
   - NODE_HOSTNAME=nebulae.yourdomain.com
   - FEDERATION_INSECURE_MODE=False
   - FLASK_ENV=production
+  # ---- Logging ----------------------------------------------------------------
+  # DEBUG | INFO | WARNING | ERROR | CRITICAL
+  # DEBUG is verbose and includes federation payloads (other people's profile
+  # data), so it belongs in short diagnostic sessions, not day-to-day running.
+  # Temporary alternative that doesn't touch this file:
+  #   sudo systemctl edit nebulae   ->  [Service] Environment="LOG_LEVEL=DEBUG"
+  #   sudo systemctl revert nebulae ->  back to normal
+  - LOG_LEVEL=INFO
 ```
 
 ### 4. Start Nebulae

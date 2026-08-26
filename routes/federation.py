@@ -1,4 +1,8 @@
 # routes/federation.py
+import logging
+
+logger = logging.getLogger(__name__)
+
 from flask import Blueprint, request, jsonify, current_app, session, g, redirect, url_for, flash
 import secrets
 import traceback
@@ -175,8 +179,8 @@ def get_group_join_settings_federated(puid):
         return jsonify(settings), 200
         
     except Exception as e:
-        print(f"ERROR in get_group_join_settings_federated: {e}")
-        traceback.print_exc()
+        logger.error(f"ERROR in get_group_join_settings_federated: {e}")
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An internal error occurred: {str(e)}'}), 500
 
 # --- NEW ENDPOINT for discovering public events ---
@@ -194,7 +198,7 @@ def discover_public_events():
                  event['event_end_datetime'] = event['event_end_datetime'].strftime('%Y-%m-%d %H:%M:%S')
         return jsonify(events)
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An internal error occurred: {str(e)}'}), 500
 # --- END NEW ENDPOINT ---
 
@@ -268,7 +272,7 @@ def get_friend_birthdays():
         return jsonify(results), 200
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An internal error occurred: {str(e)}'}), 500
 # --- END BIRTHDAY FEDERATION ENDPOINT ---
 
@@ -316,8 +320,8 @@ def group_join_request_created():
             return jsonify({'message': message}), 200
 
     except Exception as e:
-        print(f"ERROR in group_join_request_created: {e}")
-        traceback.print_exc()
+        logger.error(f"ERROR in group_join_request_created: {e}")
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An internal error occurred: {str(e)}'}), 500
 
 @federation_bp.route('/federation/api/v1/receive_group_join_request', methods=['POST'])
@@ -376,7 +380,7 @@ def receive_group_join_request():
             return jsonify({'status': 'info', 'message': message}), 200
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An internal error occurred: {str(e)}'}), 500
 
 @federation_bp.route('/federation/api/v1/group_request_accepted', methods=['POST'])
@@ -424,7 +428,7 @@ def group_request_accepted():
         request_to_process = cursor.fetchone()
 
         if not request_to_process:
-            print(f"INFO: Received group acceptance for user {user_puid} and group {group_puid}, but no pending request was found.")
+            logger.info(f"Received group acceptance for user {user_puid} and group {group_puid}, but no pending request was found.")
             # Even if no request found, maybe user joined via invite. Invite to events anyway.
             invite_user_to_source_future_events(user, 'group', group_stub['puid'])
             return jsonify({'message': 'Acknowledgement received, no pending request found.'}), 200
@@ -453,7 +457,7 @@ def group_request_accepted():
 
     except Exception as e:
         db.rollback()
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An internal error occurred: {str(e)}'}), 500
 
 
@@ -493,7 +497,7 @@ def receive_mention():
             # It's possible the post hasn't arrived yet due to federation lag.
             # We can't create a notification without a post_id.
             # Maybe retry later? For now, just return success.
-            print(f"WARN: Mention received for unknown post {post_cuid}. Skipping notification.")
+            logger.warning(f"Mention received for unknown post {post_cuid}. Skipping notification.")
             return jsonify({'message': 'Mention acknowledged, post not found locally yet.'}), 200
         post_id = post['id']
 
@@ -521,7 +525,7 @@ def receive_mention():
         return jsonify({'message': 'Mention notification received and processed.'}), 200
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An internal error occurred: {str(e)}'}), 500
 
 @federation_bp.route('/federation/api/v1/receive_friend_request', methods=['POST'])
@@ -611,7 +615,7 @@ def receive_friend_request():
             return jsonify({'status': 'error', 'message': 'Failed to process friend request.'}), 500
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An internal error occurred: {str(e)}'}), 500
 
 @federation_bp.route('/federation/api/v1/receive_follow', methods=['POST'])
@@ -669,7 +673,7 @@ def receive_follow():
             return jsonify({'status': 'info', 'message': 'User already following. Ensured invitation to future events.'}), 200
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An internal error occurred: {str(e)}'}), 500
 
 
@@ -764,7 +768,7 @@ def friend_request_rejected():
             return jsonify({'message': 'Friend request rejection acknowledged, request not found locally.'}), 200
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An internal error occurred: {str(e)}'}), 500
 
 @federation_bp.route('/federation/api/v1/receive_unfriend', methods=['POST'])
@@ -797,10 +801,10 @@ def receive_unfriend():
          return jsonify({'error': 'Target user must be a local user.'}), 400
 
     if unfriend_db(unfriender_user['id'], unfriended_user['id']):
-        print(f"INFO: Friendship removed between {unfriender_puid} and {unfriended_puid} based on remote action.")
+        logger.info(f"Friendship removed between {unfriender_puid} and {unfriended_puid} based on remote action.")
         return jsonify({'message': 'Unfriend action acknowledged and processed.'}), 200
     else:
-        print(f"INFO: Received unfriend action for {unfriender_puid} / {unfriended_puid}, but no friendship found.")
+        logger.info(f"Received unfriend action for {unfriender_puid} / {unfriended_puid}, but no friendship found.")
         return jsonify({'message': 'Unfriend action acknowledged, no existing friendship found.'}), 200
 
 @federation_bp.route('/federation/api/v1/receive_leave_group', methods=['POST'])
@@ -834,10 +838,10 @@ def receive_leave_group():
     success, message = leave_group(group['id'], leaver_user['id'])
 
     if success:
-        print(f"INFO: User {leaver_puid} left group {group_puid} based on remote action.")
+        logger.info(f"User {leaver_puid} left group {group_puid} based on remote action.")
         return jsonify({'message': 'Leave group action acknowledged and processed.'}), 200
     else:
-        print(f"INFO: Received leave group for {leaver_puid} / {group_puid}, but action failed: {message}")
+        logger.info(f"Received leave group for {leaver_puid} / {group_puid}, but action failed: {message}")
         # Even if local removal failed (e.g., not a member), acknowledge receipt.
         return jsonify({'message': f'Leave group action acknowledged, but local removal failed: {message}'}), 200
 
@@ -906,7 +910,7 @@ def group_member_removed():
                 group_id=group['id']
             )
         
-        print(f"INFO: User {user_puid} removed from group {group_puid} ({removal_type})")
+        logger.info(f"User {user_puid} removed from group {group_puid} ({removal_type})")
         
         return jsonify({
             'status': 'success',
@@ -914,9 +918,9 @@ def group_member_removed():
         }), 200
         
     except Exception as e:
-        print(f"ERROR in group_member_removed: {e}")
+        logger.error(f"ERROR in group_member_removed: {e}")
         import traceback
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': str(e)}), 500
 
 @federation_bp.route('/federation/api/v1/group_request_rejected', methods=['POST'])
@@ -984,7 +988,7 @@ def group_request_rejected():
             group_id=group_stub['id']
         )
         
-        print(f"INFO: User {user_puid} notified of rejection from group {group_puid}")
+        logger.info(f"User {user_puid} notified of rejection from group {group_puid}")
         
         return jsonify({
             'status': 'success',
@@ -992,9 +996,9 @@ def group_request_rejected():
         }), 200
         
     except Exception as e:
-        print(f"ERROR in group_request_rejected: {e}")
+        logger.error(f"ERROR in group_request_rejected: {e}")
         import traceback
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': str(e)}), 500
 
 @federation_bp.route('/federation/api/v1/request_viewer_token', methods=['POST'])
@@ -1120,7 +1124,7 @@ def initiate_viewer_session():
         # Catches verification errors, invalid salt, bad format
         return jsonify({'error': f'Invalid viewer token: {e}'}), 401
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An internal error occurred: {str(e)}'}), 500
 
 @federation_bp.route('/federation/inbox', methods=['POST', 'PUT', 'DELETE'])
@@ -1230,7 +1234,7 @@ def receive_federated_action():
                          raise ValueError("Failed to process remote event stub.")
                     event_id = event_stub['id']
                 except (ValueError, TypeError, KeyError) as e:
-                     print(f"Error processing event data: {e}")
+                     logger.error(f"Error processing event data: {e}")
                      return jsonify({'error': f'Invalid event data in payload: {e}'}), 400
 
 
@@ -1785,7 +1789,7 @@ def receive_federated_action():
             
             if data['comments_disabled']:
                 if disable_comments_for_post(data['cuid']):
-                    print(f"INFO: Comments disabled for remote post {data['cuid']} via federation.")
+                    logger.info(f"Comments disabled for remote post {data['cuid']} via federation.")
                     return jsonify({'message': 'Post comment status updated.'}), 200
                 else:
                     return jsonify({'error': 'Failed to update post comment status locally.'}), 500
@@ -1919,7 +1923,7 @@ def receive_federated_action():
                 return jsonify({'error': 'Failed to delete media comment.'}), 500
 
         elif action_type == 'mention_removal_media_comment':
-            print("Processing federated action: mention_removal_media_comment")
+            logger.info("Processing federated action: mention_removal_media_comment")
             
             media_comment_cuid = data.get('media_comment_cuid')
             removed_mention = data.get('removed_mention')
@@ -1943,12 +1947,12 @@ def receive_federated_action():
             """, (updated_content, media_comment_cuid))
             db.commit()
             
-            print(f"federation_inbox: Processed mention_removal_media_comment for @{removed_mention} from media comment {media_comment_cuid}")
+            logger.info(f"federation_inbox: Processed mention_removal_media_comment for @{removed_mention} from media comment {media_comment_cuid}")
             return jsonify({'message': 'Mention removed successfully'}), 200
 
         # --- NEW: HANDLE PROFILE UPDATE ---
         elif action_type == 'profile_update':
-            print("Processing federated action: profile_update")
+            logger.info("Processing federated action: profile_update")
             
             # 1. Validate payload
             puid = data.get('puid')
@@ -1974,17 +1978,17 @@ def receive_federated_action():
 
             # 3. Update the details
             if update_remote_user_details(puid, display_name, profile_picture_path):
-                print(f"Successfully updated profile for remote user {puid} from {user_hostname}.")
+                logger.info(f"Successfully updated profile for remote user {puid} from {user_hostname}.")
                 return jsonify({'message': 'Profile update received and processed.'}), 200
             else:
-                print(f"Failed to update profile for remote user {puid}. update_remote_user_details returned False.")
+                logger.error(f"Failed to update profile for remote user {puid}. update_remote_user_details returned False.")
                 return jsonify({'error': 'Failed to update remote user profile locally.'}), 500
         # --- END NEW BLOCK ---
 
         # --- NEW: Privacy Action Handlers ---
         
         elif action_type == 'tag_removal':
-            print("Processing federated action: tag_removal")
+            logger.info("Processing federated action: tag_removal")
             
             post_cuid = data.get('post_cuid')
             removed_user_puid = data.get('removed_user_puid')
@@ -2000,13 +2004,13 @@ def receive_federated_action():
             # Update the post to remove the tag
             from db_queries.posts import remove_user_tag_from_post
             if remove_user_tag_from_post(post_cuid, removed_user_puid):
-                print(f"federation_inbox: Processed tag_removal for user {removed_user_puid} from post {post_cuid}")
+                logger.info(f"federation_inbox: Processed tag_removal for user {removed_user_puid} from post {post_cuid}")
                 return jsonify({'message': 'Tag removed successfully'}), 200
             else:
                 return jsonify({'error': 'Failed to remove tag'}), 500
         
         elif action_type == 'mention_removal_post':
-            print("Processing federated action: mention_removal_post")
+            logger.info("Processing federated action: mention_removal_post")
             
             post_cuid = data.get('post_cuid')
             removed_mention = data.get('removed_mention')
@@ -2026,11 +2030,11 @@ def receive_federated_action():
             cursor.execute("UPDATE posts SET content = ? WHERE cuid = ?", (updated_content, post_cuid))
             db.commit()
             
-            print(f"federation_inbox: Processed mention_removal_post for @{removed_mention} from post {post_cuid}")
+            logger.info(f"federation_inbox: Processed mention_removal_post for @{removed_mention} from post {post_cuid}")
             return jsonify({'message': 'Mention removed successfully'}), 200
         
         elif action_type == 'mention_removal_comment':
-            print("Processing federated action: mention_removal_comment")
+            logger.info("Processing federated action: mention_removal_comment")
             
             comment_cuid = data.get('comment_cuid')
             removed_mention = data.get('removed_mention')
@@ -2050,11 +2054,11 @@ def receive_federated_action():
             cursor.execute("UPDATE comments SET content = ? WHERE cuid = ?", (updated_content, comment_cuid))
             db.commit()
             
-            print(f"federation_inbox: Processed mention_removal_comment for @{removed_mention} from comment {comment_cuid}")
+            logger.info(f"federation_inbox: Processed mention_removal_comment for @{removed_mention} from comment {comment_cuid}")
             return jsonify({'message': 'Mention removed successfully'}), 200
         
         elif action_type == 'media_tags_update':
-            print("Processing federated action: media_tags_update")
+            logger.info("Processing federated action: media_tags_update")
             
             muid = data.get('muid')
             tagged_user_puids = data.get('tagged_user_puids', [])
@@ -2080,11 +2084,11 @@ def receive_federated_action():
             """, (tagged_json, muid))
             db.commit()
             
-            print(f"federation_inbox: Updated tags for media {muid}")
+            logger.info(f"federation_inbox: Updated tags for media {muid}")
             return jsonify({'message': 'Media tags updated successfully'}), 200
         
         elif action_type == 'media_tag_removal':
-            print("Processing federated action: media_tag_removal")
+            logger.info("Processing federated action: media_tag_removal")
             
             muid = data.get('muid')
             removed_user_puid = data.get('removed_user_puid')
@@ -2116,7 +2120,7 @@ def receive_federated_action():
                 except (json.JSONDecodeError, TypeError):
                     pass
             
-            print(f"federation_inbox: Removed tag for user {removed_user_puid} from media {muid}")
+            logger.info(f"federation_inbox: Removed tag for user {removed_user_puid} from media {muid}")
             return jsonify({'message': 'Media tag removed successfully'}), 200
         
         # --- END Privacy Action Handlers ---
@@ -2124,26 +2128,26 @@ def receive_federated_action():
         # --- Poll Actions ---
         elif action_type == 'poll_create':
             # Create poll for a federated post
-            print(f"🔔 federation_inbox: Received poll_create action for post {data.get('post_cuid')}")
-            print(f"🔔 Poll data received: {data.get('poll')}")
+            logger.info(f"🔔 federation_inbox: Received poll_create action for post {data.get('post_cuid')}")
+            logger.info(f"🔔 Poll data received: {data.get('poll')}")
             
             if 'post_cuid' not in data or 'poll' not in data:
-                print(f"❌ federation_inbox: Missing required fields for poll_create")
+                logger.info(f"❌ federation_inbox: Missing required fields for poll_create")
                 return jsonify({'error': 'Missing required fields for poll_create'}), 400
             
             from db_queries.polls import create_poll
             
             post = get_post_by_cuid(data['post_cuid'])
             if not post:
-                print(f"❌ federation_inbox: Post {data['post_cuid']} not found for poll creation")
+                logger.info(f"❌ federation_inbox: Post {data['post_cuid']} not found for poll creation")
                 return jsonify({'error': 'Post not found'}), 404
             
-            print(f"✅ federation_inbox: Post found with ID {post['id']}")
+            logger.info(f"✅ federation_inbox: Post found with ID {post['id']}")
             
             poll_data = data['poll']
             options = [opt['option_text'] for opt in poll_data.get('options', [])]
             
-            print(f"🔔 federation_inbox: Creating poll with {len(options)} options")
+            logger.info(f"🔔 federation_inbox: Creating poll with {len(options)} options")
             
             if len(options) >= 2:
                 poll_id = create_poll(
@@ -2153,12 +2157,12 @@ def receive_federated_action():
                     allow_add_options=poll_data.get('allow_add_options', False)
                 )
                 if poll_id:
-                    print(f"✅ federation_inbox: Poll created successfully with ID {poll_id}")
+                    logger.info(f"✅ federation_inbox: Poll created successfully with ID {poll_id}")
                 else:
-                    print(f"❌ federation_inbox: create_poll returned None - poll creation failed")
+                    logger.error(f"❌ federation_inbox: create_poll returned None - poll creation failed")
                     return jsonify({'error': 'Failed to create poll in database'}), 500
             else:
-                print(f"❌ federation_inbox: Not enough options ({len(options)}) to create poll")
+                logger.info(f"❌ federation_inbox: Not enough options ({len(options)}) to create poll")
             
             return jsonify({'message': 'Poll created successfully'}), 200
         
@@ -2292,7 +2296,7 @@ def receive_federated_action():
             return jsonify({'error': f'Unsupported action type: {action_type}'}), 400
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An internal error occurred: {str(e)}'}), 500
 
 @federation_bp.route('/federation/api/v1/receive_notification', methods=['POST'])
@@ -2354,7 +2358,7 @@ def receive_notification():
             post = get_post_by_cuid(post_cuid)
             if not post:
                 # Post might not have arrived yet. Acknowledge.
-                print(f"WARN: Notification received for unknown post {post_cuid}. Skipping.")
+                logger.warning(f"Notification received for unknown post {post_cuid}. Skipping.")
                 return jsonify({'message': 'Notification acknowledged, post not found locally yet.'}), 200
             post_id = post['id']
 
@@ -2372,7 +2376,7 @@ def receive_notification():
             from db_queries.media import get_media_by_muid
             media = get_media_by_muid(muid)
             if not media:
-                print(f"WARN: Notification received for unknown media {muid}. Skipping.")
+                logger.warning(f"Notification received for unknown media {muid}. Skipping.")
                 return jsonify({'message': 'Notification acknowledged, media not found locally yet.'}), 200
             media_id = media['id']
         
@@ -2397,7 +2401,7 @@ def receive_notification():
         return jsonify({'message': 'Notification received and processed.'}), 200
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An internal error occurred: {str(e)}'}), 500
 
 
@@ -2538,9 +2542,9 @@ def create_parental_approval():
             return jsonify({'error': 'Failed to create approval request'}), 500
             
     except Exception as e:
-        print(f"ERROR in create_parental_approval: {e}")
+        logger.error(f"ERROR in create_parental_approval: {e}")
         import traceback
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An internal error occurred: {str(e)}'}), 500
     
     # =============================================================================
@@ -2676,7 +2680,7 @@ def receive_dm_conversation():
             return jsonify({'error': 'Failed to create conversation'}), 500
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'Internal error: {str(e)}'}), 500
 
 
@@ -2780,7 +2784,7 @@ def receive_dm_message():
                     ))
                     db.commit()
                 except Exception as e:
-                    print(f"WARN: Could not store federated DM media {muid}: {e}")
+                    logger.warning(f"Could not store federated DM media {muid}: {e}")
 
         # No notification record needed — the message badge is driven by
         # get_unread_conversation_count_for_user which queries direct_messages
@@ -2790,7 +2794,7 @@ def receive_dm_message():
         return jsonify({'message': 'Message received', 'msg_uid': msg_uid}), 201
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'Internal error: {str(e)}'}), 500
 
 
@@ -2826,7 +2830,7 @@ def receive_dm_edit():
         return jsonify({'message': 'Edit applied'}), 200
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'Internal error: {str(e)}'}), 500
 
 
@@ -2857,7 +2861,7 @@ def receive_dm_delete():
         return jsonify({'message': 'Delete applied'}), 200
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'Internal error: {str(e)}'}), 500
 
 
@@ -2945,7 +2949,7 @@ def receive_dm_participant_update():
         return jsonify({'message': f'Participant {action} applied'}), 200
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'Internal error: {str(e)}'}), 500
     
 @federation_bp.route('/federation/api/v1/dm_request_accepted', methods=['POST'])
@@ -2987,7 +2991,7 @@ def receive_dm_request_accepted():
         return jsonify({'message': 'Notification created'}), 200
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'Internal error: {str(e)}'}), 500
 
 
@@ -3028,7 +3032,7 @@ def receive_dm_request_declined():
         return jsonify({'message': 'Notification created'}), 200
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'Internal error: {str(e)}'}), 500
 
 
@@ -3061,9 +3065,9 @@ def federation_catchup():
         from db_queries.federation import get_federation_outbox_for_node
         items = get_federation_outbox_for_node(requesting_hostname, since_dt)
 
-        print(f"federation_catchup: Returning {len(items)} missed items to recovering node {requesting_hostname} since {since_str}")
+        logger.info(f"federation_catchup: Returning {len(items)} missed items to recovering node {requesting_hostname} since {since_str}")
         return jsonify({'items': items, 'count': len(items)}), 200
 
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An internal error occurred: {str(e)}'}), 500

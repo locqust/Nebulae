@@ -44,6 +44,7 @@ htmlcov
 *.env
 .tailwind/
 
+
 # Node modules (if any frontend tooling)
 node_modules
 
@@ -56,3 +57,5 @@ node_modules
 Thumbs.db
 #Native install scripts
 scripts/
+README-LOCALISE.md
+*.pyc

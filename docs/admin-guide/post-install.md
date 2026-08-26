@@ -81,6 +81,17 @@ environment:
       # Optional: Set to True only for testing without HTTPS
       - FEDERATION_INSECURE_MODE=False
 
+      # Logging 
+      # DEBUG | INFO | WARNING | ERROR | CRITICAL
+      # DEBUG is verbose and includes federation payloads (other people's profile
+      # data), so it belongs in short diagnostic sessions, not day-to-day running.
+      # Temporary alternative that doesn't touch this file:
+      #   sudo systemctl edit nebulae   ->  [Service] Environment="LOG_LEVEL=DEBUG"
+      #   sudo systemctl revert nebulae ->  back to normal
+      # Note - running DEBUG for long periods WILL fill up your /var/log/journal and # this will not rotate out unless configured. The following commands can clean # up your journal file
+      #   sudo journalctl --vacuum-time=7d          # drop anything older than a week
+      #   sudo journalctl -u nebulae --vacuum-time=1d   # or just Nebulae's
+      - LOG_LEVEL=INFO
 ```
 
 **Important Settings:**

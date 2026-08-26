@@ -1,6 +1,10 @@
 # routes/settings.py
 # Contains routes for managing user settings.
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from flask import Blueprint, request, jsonify, session, redirect, url_for, flash
 from db_queries.users import (get_user_id_by_username, get_user_by_username, 
                               update_user_password_by_id, update_username,
@@ -50,7 +54,7 @@ def update_settings():
         
         return jsonify({'message': 'Settings updated successfully'}), 200
     except Exception as e:
-        print(f"Error updating settings for user {user_id}: {e}")
+        logger.error(f"Error updating settings for user {user_id}: {e}")
         return jsonify({'error': 'An internal error occurred while updating settings.'}), 500
 
 @settings_bp.route('/update_account', methods=['POST'])

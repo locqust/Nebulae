@@ -1,6 +1,10 @@
 # routes/conversations.py
 # Contains routes for managing direct messaging conversations.
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from flask import Blueprint, request, jsonify, session, render_template, redirect, url_for, flash, current_app
 from werkzeug.utils import secure_filename
 import os
@@ -1240,7 +1244,7 @@ def upload_dm_media():
                 relative_path = os.path.join('dm_media', unique_filename)
                 uploaded_files.append(relative_path)
             except Exception as e:
-                print(f"Error saving file: {e}")
+                logger.error(f"Error saving file: {e}")
                 continue
     
     if not uploaded_files:
@@ -1300,7 +1304,7 @@ def upload_conversation_picture(conv_uid):
                 f.write(decoded_image)
             picture_path = os.path.join('conv_pics', conv_uid, filename)
         except Exception as e:
-            traceback.print_exc()
+            logger.exception("Unhandled exception")
             return jsonify({'error': f'Error processing image: {e}'}), 500
 
     elif media_browser_path:
@@ -1321,7 +1325,7 @@ def upload_conversation_picture(conv_uid):
             shutil.copy2(src, os.path.join(pic_dir, dest_filename))
             picture_path = os.path.join('conv_pics', conv_uid, dest_filename)
         except Exception as e:
-            traceback.print_exc()
+            logger.exception("Unhandled exception")
             return jsonify({'error': f'Error copying image: {e}'}), 500
 
     if not picture_path:

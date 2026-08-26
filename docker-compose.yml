@@ -31,6 +31,7 @@ services:
       - FEDERATION_INSECURE_MODE=False
       # Optional: Set to production
       - FLASK_ENV=production
+      - LOG_LEVEL=INFO
     restart: unless-stopped
     command: gunicorn --bind 0.0.0.0:5000 --worker-class gthread --workers 2 --threads 4 --timeout 120 --access-logfile - --error-logfile - "app:app"
 

@@ -1,4 +1,8 @@
 # routes/notifications.py
+import logging
+
+logger = logging.getLogger(__name__)
+
 from flask import Blueprint, jsonify, session, redirect, url_for, flash, current_app, request
 from datetime import datetime
 
@@ -363,7 +367,7 @@ def check_new_notifications():
                 
                 new_notifications.append(n)
         except Exception as e:
-            print(f"Error processing notification timestamp: {e}")
+            logger.error(f"Error processing notification timestamp: {e}")
             continue
     
     return jsonify({

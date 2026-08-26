@@ -883,13 +883,6 @@ def remove_mention_from_media_comment(cuid, user_display_name):
     # Pattern: @DisplayName -> DisplayName
     pattern = r'@(' + re.escape(user_display_name) + r')\b'
     new_content = re.sub(pattern, r'\1', content, flags=re.IGNORECASE)
-
-        # DEBUG
-    print(f"DEBUG: Removing mention of '{user_display_name}'")
-    print(f"DEBUG: Original content: {content}")
-    print(f"DEBUG: Pattern: {pattern}")
-    print(f"DEBUG: New content: {new_content}")
-    print(f"DEBUG: Content changed: {new_content != content}")
     
     # Only update if content actually changed
     if new_content == content:

@@ -1,4 +1,8 @@
 # routes/comments.py
+import logging
+
+logger = logging.getLogger(__name__)
+
 import json
 import traceback
 
@@ -88,8 +92,8 @@ def add_comment_route(post_cuid):
     except Exception as e:
         error_message = str(e)
         flash(f'Failed to add comment: {error_message}', 'danger')
-        print(f"ERROR: Failed to add comment: {error_message}")
-        traceback.print_exc()
+        logger.error(f"Failed to add comment: {error_message}")
+        logger.exception("Unhandled exception")
 
     # BUG FIX & REFACTOR: Safely check for the event and its puid before redirecting.
         # Add anchor to scroll back to the post
@@ -150,8 +154,8 @@ def edit_comment_route(cuid):
         else:
             return jsonify({'error': 'Failed to update comment.'}), 500
     except Exception as e:
-        print(f"ERROR: Failed to edit comment {cuid}: {e}")
-        traceback.print_exc()
+        logger.error(f"Failed to edit comment {cuid}: {e}")
+        logger.exception("Unhandled exception")
         return jsonify({'error': 'An unexpected error occurred while updating the comment.'}), 500
 
 
@@ -226,8 +230,8 @@ def delete_comment_route(cuid):
             flash('Failed to delete comment.', 'danger')
     except Exception as e:
         flash(f'Failed to delete comment: {e}', 'danger')
-        print(f"ERROR: Failed to delete comment {cuid}: {e}")
-        traceback.print_exc()
+        logger.error(f"Failed to delete comment {cuid}: {e}")
+        logger.exception("Unhandled exception")
 
     # UNINDENT THESE - same level as 'try'
     # Add anchor to scroll back to the post after deleting comment
@@ -261,7 +265,7 @@ def remove_mention_from_comment_route(comment_cuid):
         else:
             return jsonify({'error': 'Failed to remove mention'}), 400
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An error occurred: {e}'}), 500
 
 
@@ -300,5 +304,5 @@ def hide_comment_route(comment_cuid):
             return jsonify({'error': 'Failed to hide comment'}), 400
     except Exception as e:
         import traceback
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'An error occurred: {e}'}), 500

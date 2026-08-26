@@ -1,4 +1,8 @@
 # routes/parental.py
+import logging
+
+logger = logging.getLogger(__name__)
+
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, current_app
 from db_queries.users import get_user_by_username, get_user_by_id, get_user_by_puid
 from db_queries.parental_controls import (
@@ -98,15 +102,15 @@ def get_parental_dashboard_content():
     from db_queries.users import get_user_by_puid
     for approval in approvals:
         # DEBUG: Print the raw approval data
-        print(f"DEBUG: Processing approval ID {approval.get('id')}")
-        print(f"DEBUG: approval_type = {approval.get('approval_type')}")
-        print(f"DEBUG: target_puid (column) = {approval.get('target_puid')}")
-        print(f"DEBUG: request_data (raw) = {approval.get('request_data')}")
+        logger.debug(f"Processing approval ID {approval.get('id')}")
+        logger.debug(f"approval_type = {approval.get('approval_type')}")
+        logger.debug(f"target_puid (column) = {approval.get('target_puid')}")
+        logger.debug(f"request_data (raw) = {approval.get('request_data')}")
         
         if approval.get('request_data'):
             try:
                 approval['request_data_parsed'] = json.loads(approval['request_data'])
-                print(f"DEBUG: request_data_parsed = {approval['request_data_parsed']}")
+                logger.debug(f"request_data_parsed = {approval['request_data_parsed']}")
                 
                 # Format event datetime for display
                 if approval['approval_type'] == 'event_invite':
@@ -141,18 +145,18 @@ def get_parental_dashboard_content():
                                 approval['formatted_event_datetime'] = start_str
                                 
                         except (ValueError, TypeError) as e:
-                            print(f"Error formatting event datetime: {e}")
+                            logger.error(f"Error formatting event datetime: {e}")
                             approval['formatted_event_datetime'] = event_datetime_str
                 
                 # Fetch target user information for OUTGOING friend requests
                 if approval['approval_type'] == 'friend_request_out':
                     # Support both key formats: 'receiver_puid' (from send_friend_request_route) and 'target_puid' (from send_remote_request_proxy)
                     receiver_puid = approval['request_data_parsed'].get('receiver_puid') or approval['request_data_parsed'].get('target_puid')
-                    print(f"DEBUG: Outgoing request - puid from parsed = {receiver_puid}")
+                    logger.debug(f"Outgoing request - puid from parsed = {receiver_puid}")
                     
                     if receiver_puid:
                         target_user = get_user_by_puid(receiver_puid)
-                        print(f"DEBUG: Found target_user = {target_user}")
+                        logger.debug(f"Found target_user = {target_user}")
                         
                         if target_user:
                             approval['target_user'] = target_user
@@ -167,7 +171,7 @@ def get_parental_dashboard_content():
                             else:
                                 approval['target_profile_picture_url'] = url_for('static', filename='images/default_avatar.png')
                             
-                            print(f"DEBUG: Set target_profile_picture_url = {approval.get('target_profile_picture_url')}")
+                            logger.debug(f"Set target_profile_picture_url = {approval.get('target_profile_picture_url')}")
                 
                 # Fetch target user information for INCOMING friend requests
                 elif approval['approval_type'] == 'friend_request_in':
@@ -227,14 +231,14 @@ def get_parental_dashboard_content():
                                 approval['target_profile_picture_url'] = url_for('static', filename='images/default_avatar.png')
                         
             except (ValueError, TypeError) as e:
-                print(f"DEBUG: Error parsing request_data: {e}")
+                logger.debug(f"Error parsing request_data: {e}")
                 approval['request_data_parsed'] = {}
         else:
             approval['request_data_parsed'] = {}
     
     # DEBUG: Print what we're sending to template
     for approval in approvals:
-        print(f"DEBUG FINAL: ID={approval.get('id')}, has target_user={bool(approval.get('target_user'))}, has pic_url={bool(approval.get('target_profile_picture_url'))}")
+        logger.info(f"DEBUG FINAL: ID={approval.get('id')}, has target_user={bool(approval.get('target_user'))}, has pic_url={bool(approval.get('target_profile_picture_url'))}")
     
     # Render the *partial* template
     return render_template('_parental_dashboard_content.html',
@@ -448,7 +452,7 @@ def approve_request_route(approval_id):
                     return jsonify({'error': 'Failed to send group join request to remote node'}), 500
                     
             except requests.exceptions.RequestException as e:
-                print(f"ERROR sending approved group join request: {e}")
+                logger.error(f"ERROR sending approved group join request: {e}")
                 return jsonify({'error': f'Failed to connect to remote node: {e}'}), 500
         
         elif approval['approval_type'] == 'event_invite':
@@ -673,9 +677,9 @@ def approve_request_route(approval_id):
         return jsonify({'error': f'Unknown approval type: {approval["approval_type"]}'}), 400
     
     except Exception as e:
-        print(f"Error executing approved action: {e}")
+        logger.error(f"Error executing approved action: {e}")
         import traceback
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': 'Failed to execute approved action'}), 500
 
 @parental_bp.route('/parental/deny/<int:approval_id>', methods=['POST'])

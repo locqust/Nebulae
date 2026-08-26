@@ -226,6 +226,15 @@ NODE_HOSTNAME=${NODE_HOSTNAME}
 FLASK_ENV=production
 FEDERATION_INSECURE_MODE=False
 
+# ---- Logging ----------------------------------------------------------------
+# DEBUG | INFO | WARNING | ERROR | CRITICAL
+# DEBUG is verbose and includes federation payloads (other people's profile
+# data), so it belongs in short diagnostic sessions, not day-to-day running.
+# Temporary alternative that doesn't touch this file:
+#   sudo systemctl edit nebulae   ->  [Service] Environment="LOG_LEVEL=DEBUG"
+#   sudo systemctl revert nebulae ->  back to normal
+LOG_LEVEL=INFO
+
 # ---- Media paths (native install) -------------------------------------------
 # These override the Docker-style /app/* defaults in app.py
 PROFILE_PICTURE_STORAGE_DIR=${PROFILE_PIC_DIR}

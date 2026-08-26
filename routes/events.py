@@ -1,4 +1,8 @@
 # routes/events.py
+import logging
+
+logger = logging.getLogger(__name__)
+
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, current_app
 from db import get_db
 from db_queries.users import get_user_by_username, get_user_by_puid
@@ -70,7 +74,7 @@ def process_event_list(events):
             
             processed.append(event)
         except (ValueError, TypeError) as e:
-            print(f"Warning: Could not parse datetime for event {event_dict.get('puid')}: {e}")
+            logger.warning(f"Could not parse datetime for event {event_dict.get('puid')}: {e}")
             processed.append(event_dict) # Keep original if parsing fails
     return processed
 
@@ -177,7 +181,7 @@ def get_events_content():
                     if event_data.get('event_end_datetime'):
                         event_end_datetime = datetime.strptime(event_data['event_end_datetime'], '%Y-%m-%d %H:%M:%S')
                 except (ValueError, TypeError):
-                    print(f"WARN: Skipping remote event {event_puid} from {node['hostname']} due to invalid date format.")
+                    logger.warning(f"Skipping remote event {event_puid} from {node['hostname']} due to invalid date format.")
                     continue
 
                 get_or_create_remote_event_stub(
@@ -195,10 +199,10 @@ def get_events_content():
                     profile_picture_path=event_data.get('profile_picture_path')
                 )
         except requests.exceptions.RequestException as e:
-            print(f"ERROR: Could not fetch public events from node {node['hostname']}: {e}")
+            logger.error(f"Could not fetch public events from node {node['hostname']}: {e}")
         except Exception as e:
-            print(f"ERROR: An unexpected error occurred while fetching from {node['hostname']}: {e}")
-            traceback.print_exc()
+            logger.error(f"An unexpected error occurred while fetching from {node['hostname']}: {e}")
+            logger.exception("Unhandled exception")
     
     # --- End Federated Discovery ---
 
@@ -272,7 +276,7 @@ def get_discover_public_content():
                     if event_data.get('event_end_datetime'):
                         event_end_datetime = datetime.strptime(event_data['event_end_datetime'], '%Y-%m-%d %H:%M:%S')
                 except (ValueError, TypeError):
-                    print(f"WARN: Skipping remote event {event_puid} from {node['hostname']} due to invalid date format.")
+                    logger.warning(f"Skipping remote event {event_puid} from {node['hostname']} due to invalid date format.")
                     continue
 
                 get_or_create_remote_event_stub(
@@ -290,10 +294,10 @@ def get_discover_public_content():
                     profile_picture_path=event_data.get('profile_picture_path')
                 )
         except requests.exceptions.RequestException as e:
-            print(f"ERROR: Could not fetch public events from node {node['hostname']}: {e}")
+            logger.error(f"Could not fetch public events from node {node['hostname']}: {e}")
         except Exception as e:
-            print(f"ERROR: An unexpected error occurred while fetching from {node['hostname']}: {e}")
-            traceback.print_exc()
+            logger.error(f"An unexpected error occurred while fetching from {node['hostname']}: {e}")
+            logger.exception("Unhandled exception")
 
     # Get all discoverable public events (local + stubs)
     discover_public_events_raw = get_discoverable_public_events()
@@ -394,7 +398,7 @@ def event_profile(puid):
             return redirect(request.referrer or url_for('main.index'))
         except Exception as e:
             flash(f"An error occurred while trying to view the remote event: {e}", "danger")
-            traceback.print_exc()
+            logger.exception("Unhandled exception")
             return redirect(request.referrer or url_for('main.index'))
         
     if event.get('event_datetime'):
@@ -956,7 +960,7 @@ def upload_event_picture(puid):
             flash('Event picture updated!', 'success')
         except Exception as e:
             flash(f"Error processing image: {e}", 'danger')
-            traceback.print_exc()
+            logger.exception("Unhandled exception")
 
     return redirect(url_for('events.event_profile', puid=puid))
 
@@ -1027,7 +1031,7 @@ def upload_event_cover(puid):
         return jsonify({'success': True, 'cover_url': cover_url}), 200
  
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'Error processing image: {e}'}), 500
 
 @events_bp.route('/<puid>/edit', methods=['POST'])
@@ -1210,7 +1214,7 @@ def create_event_post_route(event_puid):
             flash('Failed to create post.', 'danger')
     except Exception as e:
         flash(f'An error occurred: {e}', 'danger')
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
 
     return redirect(url_for('events.event_profile', puid=event_puid))
 

@@ -1,4 +1,8 @@
 # app.py
+import logging
+
+logger = logging.getLogger(__name__)
+
 from flask import Flask, render_template, request, redirect, url_for, session, flash, g, send_from_directory, jsonify, make_response, current_app
 import os
 import hashlib
@@ -40,15 +44,21 @@ from routes.shortcuts import shortcuts_bp
 # Application version
 __version__ = "0.9.6.1-beta"
 
+# Configure logging before anything else emits a line, so that LOG_LEVEL
+# actually governs the whole startup sequence.
+from utils.logging_setup import configure_logging
+configure_logging()
+
 app = Flask(__name__)
 Compress(app)
 # Load secret key from environment variable.
 # IMPORTANT: In a production environment, this should be a long, random, and securely stored string.
 SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:
-    print("WARNING: SECRET_KEY environment variable not set. Using a temporary, insecure key. User sessions will not persist across restarts.")
+    logger.warning("SECRET_KEY environment variable not set. Using a temporary, insecure key. User sessions will not persist across restarts.")
     SECRET_KEY = os.urandom(24)
 app.secret_key = SECRET_KEY
+configure_logging(app)
 
 
 # Define the path for the SQLite database file
@@ -134,7 +144,7 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SECURE'] = _secure_cookies
 
-print(f"Session cookies: SameSite=Lax, HttpOnly=True, Secure={_secure_cookies}")
+logger.info(f"Session cookies: SameSite=Lax, HttpOnly=True, Secure={_secure_cookies}")
 if not _secure_cookies:
     print("WARNING: Session cookies are not marked Secure. This is expected on an "
           "HTTP-only test or LAN install, but should NEVER be used on a public "
@@ -183,7 +193,7 @@ def _federation_recovery():
                      and n.get('connection_type') == 'full']
 
             if not nodes:
-                print("federation_recovery: No connected full nodes, skipping.")
+                logger.warning("federation_recovery: No connected full nodes, skipping.")
                 return
 
             local_hostname = app.config.get('NODE_HOSTNAME')
@@ -224,11 +234,11 @@ def _federation_recovery():
 
                     items = response.json().get('items', [])
                     if not items:
-                        print(f"federation_recovery: No missed items from {hostname}.")
+                        logger.info(f"federation_recovery: No missed items from {hostname}.")
                         update_node_last_sync(hostname)
                         continue
 
-                    print(f"federation_recovery: Replaying {len(items)} missed items from {hostname}.")
+                    logger.info(f"federation_recovery: Replaying {len(items)} missed items from {hostname}.")
 
                     # Step 2: Replay each item against our own local endpoints.
                     # We sign as the remote node so @signature_required accepts them normally.
@@ -263,20 +273,20 @@ def _federation_recovery():
                             )
                             processed += 1
                         except Exception as item_err:
-                            print(f"federation_recovery: Failed to replay {endpoint}: {item_err}")
+                            logger.error(f"federation_recovery: Failed to replay {endpoint}: {item_err}")
 
-                    print(f"federation_recovery: Replayed {processed}/{len(items)} items from {hostname}.")
+                    logger.info(f"federation_recovery: Replayed {processed}/{len(items)} items from {hostname}.")
                     update_node_last_sync(hostname)
 
                 except _req.RequestException as e:
-                    print(f"federation_recovery: Could not reach {hostname} (still offline?): {e}")
+                    logger.error(f"federation_recovery: Could not reach {hostname} (still offline?): {e}")
                 except Exception as e:
-                    print(f"federation_recovery: Unexpected error for {hostname}: {e}")
-                    traceback.print_exc()
+                    logger.error(f"federation_recovery: Unexpected error for {hostname}: {e}")
+                    logger.exception("Unhandled exception")
 
         except Exception as e:
-            print(f"federation_recovery: Fatal startup error: {e}")
-            traceback.print_exc()
+            logger.error(f"federation_recovery: Fatal startup error: {e}")
+            logger.exception("Unhandled exception")
 
 import threading
 _recovery_thread = threading.Thread(target=_federation_recovery, daemon=True)
@@ -537,7 +547,7 @@ def inject_user_data_functions():
                 return f"{protocol}://{origin_hostname}/event_pictures/{quote(profile_picture_path)}"
                 
         except (AttributeError, TypeError, KeyError):
-            traceback.print_exc()
+            logger.exception("Unhandled exception")
             return url_for('static', filename='images/default_avatar.png')
 
     def federated_media_url(item, author_or_filename=None):
@@ -602,7 +612,7 @@ def inject_user_data_functions():
                 return f"{protocol}://{origin_hostname}/media/{puid}/{quote(filename)}"
 
         except (AttributeError, TypeError, KeyError):
-            traceback.print_exc()
+            logger.exception("Unhandled exception")
             return "#"
             
     return dict(

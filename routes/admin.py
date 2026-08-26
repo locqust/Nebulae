@@ -1,4 +1,8 @@
 # routes/admin.py
+import logging
+
+logger = logging.getLogger(__name__)
+
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, current_app, g
 import os
 import sys
@@ -158,7 +162,7 @@ def admin_push_settings():
             except Exception as e:
                 flash(f'Failed to generate VAPID keys: {str(e)}', 'danger')
                 import traceback
-                traceback.print_exc()
+                logger.exception("Unhandled exception")
         
         return redirect(url_for('admin.admin_push_settings'))
     

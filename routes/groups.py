@@ -1,4 +1,8 @@
 # routes/groups.py
+import logging
+
+logger = logging.getLogger(__name__)
+
 import os
 import base64
 import traceback
@@ -119,7 +123,7 @@ def group_profile(puid):
             return redirect(request.referrer or url_for('main.index'))
         except Exception as e:
             flash(f"An error occurred while trying to view the remote group: {e}", "danger")
-            traceback.print_exc()
+            logger.exception("Unhandled exception")
             return redirect(request.referrer or url_for('main.index'))
 
     # ====================================================================
@@ -557,7 +561,7 @@ def create_group_post(puid):
             flash('Failed to create post.', 'danger')
     except Exception as e:
         flash(f'An error occurred: {e}', 'danger')
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
 
     return redirect(url_for('groups.group_profile', puid=puid))
 
@@ -696,7 +700,7 @@ def discover_groups_api():
             )
 
             if not local_hostname:
-                print("ERROR: NODE_HOSTNAME is not configured. Federation calls will likely fail.")
+                logger.error("NODE_HOSTNAME is not configured. Federation calls will likely fail.")
                 continue
 
             request_body = b''
@@ -719,11 +723,11 @@ def discover_groups_api():
             for group_data in remote_groups_data:
                 remote_group_puid = group_data.get('puid')
                 if not remote_group_puid:
-                    print(f"WARN: Skipping group data with missing PUID from {node['hostname']}")
+                    logger.warning(f"Skipping group data with missing PUID from {node['hostname']}")
                     continue
 
                 if remote_group_puid in added_puids:
-                    print(f"DEBUG: Skipping duplicate group {remote_group_puid} received from {node['hostname']}.")
+                    logger.debug(f"Skipping duplicate group {remote_group_puid} received from {node['hostname']}.")
                     continue
                 
                 # --- FEDERATION FIX: Check for the group's *true* origin hostname ---
@@ -737,7 +741,7 @@ def discover_groups_api():
                 # not the node we are currently querying.
                 stub_hostname = origin_hostname or node['hostname']
 
-                print(f"DEBUG: Checking remote group: {group_data.get('name')} ({remote_group_puid}) from {stub_hostname}")
+                logger.debug(f"Checking remote group: {group_data.get('name')} ({remote_group_puid}) from {stub_hostname}")
 
                 # We must create a local stub for the remote group to check relationships
                 group_stub = get_or_create_remote_group_stub(
@@ -755,13 +759,13 @@ def discover_groups_api():
                     if is_member or join_status == 'pending':
                         is_related = True
                 else:
-                    print(f"DEBUG: Could not get/create local stub for {remote_group_puid}.")
+                    logger.debug(f"Could not get/create local stub for {remote_group_puid}.")
 
-                print(f"DEBUG: Group {remote_group_puid} is_related = {is_related}")
+                logger.debug(f"Group {remote_group_puid} is_related = {is_related}")
 
                 # Skip if hidden by user
                 if group_stub and group_stub['id'] in hidden_group_ids:
-                    print(f"DEBUG: Skipping hidden group {remote_group_puid}.")
+                    logger.debug(f"Skipping hidden group {remote_group_puid}.")
                     continue
 
                 if not is_related:
@@ -785,14 +789,14 @@ def discover_groups_api():
                     group_data['profile_url'] = federated_group_profile_url(group_data)
                     discoverable_groups.append(group_data)
                     added_puids.add(remote_group_puid)
-                    print(f"DEBUG: Added remote group {remote_group_puid} ({group_data.get('name')}) from {group_data['node_hostname']} to discoverable list.")
+                    logger.debug(f"Added remote group {remote_group_puid} ({group_data.get('name')}) from {group_data['node_hostname']} to discoverable list.")
                 else:
-                    print(f"DEBUG: Skipping related group {remote_group_puid} from {stub_hostname}.")
+                    logger.debug(f"Skipping related group {remote_group_puid} from {stub_hostname}.")
 
         except requests.exceptions.RequestException as e:
-            print(f"ERROR: Could not fetch groups from node {node['hostname']}: {e}")
+            logger.error(f"Could not fetch groups from node {node['hostname']}: {e}")
         except Exception as e:
-            print(f"ERROR: An unexpected error occurred while fetching groups from {node['hostname']}: {e}")
+            logger.error(f"An unexpected error occurred while fetching groups from {node['hostname']}: {e}")
 
     return jsonify(discoverable_groups)
 
@@ -816,7 +820,7 @@ def send_remote_group_join_request(group_data, sender):
     node = get_node_by_hostname(group_hostname)
     if not node or node['status'] != 'connected' or not node['shared_secret']:
         # No connection exists, create a targeted subscription
-        print(f"No connection to {group_hostname}, creating targeted subscription for group {group_name}")
+        logger.info(f"No connection to {group_hostname}, creating targeted subscription for group {group_name}")
         node = get_or_create_targeted_subscription(
             group_hostname,
             'group',
@@ -885,11 +889,11 @@ def send_remote_group_join_request(group_data, sender):
         return jsonify(response.json()), response.status_code
 
     except requests.exceptions.RequestException as e:
-        print(f"ERROR proxying group join request to {group_hostname}: {e}")
+        logger.error(f"ERROR proxying group join request to {group_hostname}: {e}")
         return jsonify({'error': f'Failed to connect to the remote node: {e}'}), 500
     except Exception as e:
-        print(f"ERROR in send_remote_group_join_request: {e}")
-        traceback.print_exc()
+        logger.error(f"ERROR in send_remote_group_join_request: {e}")
+        logger.exception("Unhandled exception")
         return jsonify({'error': 'An unexpected error occurred.'}), 500
 
 
@@ -1090,11 +1094,11 @@ def get_join_settings(puid):
             return jsonify(response.json()), response.status_code
             
         except requests.exceptions.RequestException as e:
-            print(f"ERROR fetching join settings from {remote_hostname}: {e}")
+            logger.error(f"ERROR fetching join settings from {remote_hostname}: {e}")
             return jsonify({'error': f'Failed to connect to remote node: {e}'}), 500
         except Exception as e:
-            print(f"ERROR in get_join_settings proxy: {e}")
-            traceback.print_exc()
+            logger.error(f"ERROR in get_join_settings proxy: {e}")
+            logger.exception("Unhandled exception")
             return jsonify({'error': 'An unexpected error occurred'}), 500
     
     # For local groups (or remote users viewing local groups), continue with existing logic
@@ -1566,7 +1570,7 @@ def upload_group_picture(puid):
 
         except Exception as e:
             flash(f'Error processing image: {e}', 'danger')
-            traceback.print_exc()
+            logger.exception("Unhandled exception")
             return redirect(url_for('groups.group_profile', puid=puid))
 
     if profile_picture_path:
@@ -1632,7 +1636,7 @@ def upload_group_cover(puid):
         return jsonify({'success': True, 'cover_url': cover_url}), 200
  
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unhandled exception")
         return jsonify({'error': f'Error processing image: {e}'}), 500
 
 @groups_bp.route('/leave/<puid>', methods=['POST'])
