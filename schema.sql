@@ -704,4 +704,32 @@ CREATE INDEX IF NOT EXISTS idx_auth_throttle_lookup
 CREATE INDEX IF NOT EXISTS idx_auth_throttle_cleanup
     ON auth_throttle(failed_at);
 
-
+-- ===========================================================================
+-- Core content indexes (see migration 011_add_core_indexes.sql)
+-- Omitted deliberately: anything already covered by a UNIQUE constraint, or
+-- by the leftmost column of a composite UNIQUE (posts.cuid, users.puid,
+-- friends.user_id_1, group_members.group_id, followers.user_id,
+-- event_attendees.event_id, post_media.muid, comment_media.muid).
+-- ===========================================================================
+CREATE INDEX IF NOT EXISTS idx_posts_timestamp          ON posts(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_posts_privacy_timestamp  ON posts(privacy_setting, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_posts_profile_puid       ON posts(profile_puid);
+CREATE INDEX IF NOT EXISTS idx_posts_author_puid        ON posts(author_puid);
+CREATE INDEX IF NOT EXISTS idx_posts_group_id           ON posts(group_id);
+CREATE INDEX IF NOT EXISTS idx_posts_event_id           ON posts(event_id);
+CREATE INDEX IF NOT EXISTS idx_posts_user_id            ON posts(user_id);
+CREATE INDEX IF NOT EXISTS idx_posts_profile_user_id    ON posts(profile_user_id);
+CREATE INDEX IF NOT EXISTS idx_posts_original_cuid      ON posts(original_post_cuid);
+CREATE INDEX IF NOT EXISTS idx_comments_post_id         ON comments(post_id);
+CREATE INDEX IF NOT EXISTS idx_comments_parent          ON comments(parent_comment_id);
+CREATE INDEX IF NOT EXISTS idx_comments_user_id         ON comments(user_id);
+CREATE INDEX IF NOT EXISTS idx_post_media_post_id       ON post_media(post_id);
+CREATE INDEX IF NOT EXISTS idx_comment_media_comment_id ON comment_media(comment_id);
+CREATE INDEX IF NOT EXISTS idx_users_hostname           ON users(hostname);
+CREATE INDEX IF NOT EXISTS idx_users_user_type          ON users(user_type);
+CREATE INDEX IF NOT EXISTS idx_friends_user_2           ON friends(user_id_2);
+CREATE INDEX IF NOT EXISTS idx_group_members_user       ON group_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_event_attendees_puid     ON event_attendees(user_puid);
+CREATE INDEX IF NOT EXISTS idx_followers_page           ON followers(page_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_read  ON notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_timestamp  ON notifications(timestamp DESC);
