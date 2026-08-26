@@ -733,3 +733,9 @@ CREATE INDEX IF NOT EXISTS idx_event_attendees_puid     ON event_attendees(user_
 CREATE INDEX IF NOT EXISTS idx_followers_page           ON followers(page_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read  ON notifications(user_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_notifications_timestamp  ON notifications(timestamp DESC);
+
+-- From migrations 005 / 006
+CREATE INDEX IF NOT EXISTS idx_posts_post_type       ON posts(post_type);
+CREATE INDEX IF NOT EXISTS idx_posts_feeling         ON posts(feeling);
+CREATE INDEX IF NOT EXISTS idx_posts_life_event_type ON posts(life_event_type);
+CREATE INDEX IF NOT EXISTS idx_posts_life_event_date ON posts(life_event_date);

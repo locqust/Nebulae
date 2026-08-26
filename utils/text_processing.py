@@ -1,7 +1,7 @@
 # utils/text_processing.py
 import re
 from html import unescape
-from flask import url_for, current_app
+from flask import url_for, current_app, g, has_app_context
 from markupsafe import Markup, escape
 
 # =============================================================================
@@ -75,6 +75,73 @@ def linkify_urls(text):
     return Markup(_URL_PATTERN.sub(replace_url, text))
 
 
+def _get_mention_index():
+    """
+    Builds (and per-request caches) everything linkify_mentions needs.
+
+    The previous implementation called get_all_users_with_media_paths() for
+    every post rendered, then ran three regex passes *per known user* over the
+    text. A 20-post feed on a node that knows 200 users meant 20 full reads of
+    the users table and ~12,000 regex substitutions per page load.
+
+    Instead we read the user list once per request and compile ONE alternation
+    per mention type. Names are ordered longest-first so that the regex engine
+    still prefers "@Emma Smith" over "@Emma", which is what the old
+    sorted-by-length loop was for. Multi-word display names are why this can't
+    just be an @-token scan plus a dict lookup.
+
+    Returns (patterns, lookup) where patterns is a list of (compiled, kind)
+    and lookup maps kind -> {lowercased matched text: user dict}.
+    """
+    cached = getattr(g, '_nebulae_mention_index', None) if has_app_context() else None
+    if cached is not None:
+        return cached
+
+    from db_queries.users import get_all_users_with_media_paths
+    users = get_all_users_with_media_paths()
+
+    lookup = {'remote_full': {}, 'remote': {}, 'local': {}}
+    names = {'remote_full': [], 'remote': [], 'local': []}
+
+    for u in users or []:
+        if not u['display_name']:
+            continue
+        safe_name = str(escape(u['display_name']))
+        if u['hostname']:
+            safe_host = str(escape(u['hostname']))
+            full = f"{safe_name}@{safe_host}"
+            if full.lower() not in lookup['remote_full']:
+                lookup['remote_full'][full.lower()] = u
+                names['remote_full'].append(full)
+            if safe_name.lower() not in lookup['remote']:
+                lookup['remote'][safe_name.lower()] = u
+                names['remote'].append(safe_name)
+        else:
+            if safe_name.lower() not in lookup['local']:
+                lookup['local'][safe_name.lower()] = u
+                names['local'].append(safe_name)
+
+    def build(name_list, suffix):
+        if not name_list:
+            return None
+        # Longest first: regex alternation is ordered, so this reproduces the
+        # old "sort by display name length descending" behaviour.
+        ordered = sorted(name_list, key=len, reverse=True)
+        alt = '|'.join(re.escape(n) for n in ordered)
+        return re.compile(r'(?<!\S)@(' + alt + r')' + suffix, re.IGNORECASE)
+
+    patterns = [
+        ('remote_full', build(names['remote_full'], r'\b')),
+        ('remote',      build(names['remote'], r'(?!@)\b')),
+        ('local',       build(names['local'], r'(?!@)\b')),
+    ]
+
+    index = (patterns, lookup)
+    if has_app_context():
+        g._nebulae_mention_index = index
+    return index
+
+
 def linkify_mentions(text):
     """
     Finds @mentions in text and converts them to profile links.
@@ -96,76 +163,40 @@ def linkify_mentions(text):
     # No-op if already Markup. Everything below operates on escaped text.
     text = escape(text)
 
-    from db_queries.users import get_all_users_with_media_paths
-
-    users = get_all_users_with_media_paths()
-    if not users:
-        return Markup(text)
-
-    # We match on Display Name as this is what users are most likely to type.
-    remote_users = [u for u in users if u['hostname'] and u['display_name']]
-    local_users = [u for u in users if not u['hostname'] and u['display_name']]
-
-    # Sort by display name length (descending) to avoid partial matches.
-    sorted_remote = sorted(remote_users, key=lambda u: len(u['display_name']), reverse=True)
-    sorted_local = sorted(local_users, key=lambda u: len(u['display_name']), reverse=True)
+    patterns, lookup = _get_mention_index()
 
     processed_text = str(text)
 
-    # FEDERATION FIX: All links, for both local and remote users, must point to the
-    # local user_profile endpoint. This endpoint is responsible for determining if
-    # the user is remote and then initiating the viewer token request flow.
-    # By creating a direct link to the remote node, we were bypassing this crucial step.
+    # FEDERATION: every link points at the LOCAL user_profile endpoint, even
+    # for remote users - that endpoint handles the viewer-token flow. Linking
+    # straight to the remote node would bypass it.
+    #
+    # XSS: patterns are built from the *escaped* display name, because the text
+    # being searched has already been escaped. A user called "Bob & Sue"
+    # appears as "Bob &amp; Sue". Replacements go through a function so re.sub
+    # never interprets backslash sequences from a user-controlled name.
+    for kind, pattern in patterns:
+        if pattern is None:
+            continue
 
-    # XSS FIX: patterns are built from the *escaped* display name, because the
-    # text we are searching has already been escaped. A user called "Bob & Sue"
-    # appears in the text as "Bob &amp; Sue", so that is what we must match.
-    # Replacements go through a lambda so that re.sub does not interpret
-    # backslash sequences in a user-controlled display name.
+        def replace(match, _kind=kind):
+            user = lookup[_kind].get(match.group(1).lower())
+            if not user:
+                return match.group(0)
+            safe_name = str(escape(user['display_name']))
+            if _kind == 'local' and user['user_type'] == 'public_page':
+                profile_url = url_for('main.public_page_profile', puid=user['puid'])
+            else:
+                profile_url = url_for('main.user_profile', puid=user['puid'])
+            colour = 'text-blue-600' if _kind == 'local' else 'text-teal-600'
+            if _kind == 'remote_full':
+                label = f"@{safe_name}@{str(escape(user['hostname']))}"
+            else:
+                label = f"@{safe_name}"
+            return (f'<a href="{escape(profile_url)}" class="font-semibold '
+                    f'{colour} hover:underline">{label}</a>')
 
-    # Pass 1: Handle fully-qualified remote mentions (@DisplayName@hostname).
-    for user in sorted_remote:
-        safe_name = str(escape(user['display_name']))
-        safe_host = str(escape(user['hostname']))
-        pattern = r'(?<!\S)@' + re.escape(safe_name) + r'@' + re.escape(safe_host) + r'\b'
-        # Corrected: Point to the local endpoint to handle token logic.
-        profile_url = url_for('main.user_profile', puid=user['puid'])
-        # The link text can still show the full remote address for clarity.
-        replacement_html = (
-            f'<a href="{escape(profile_url)}" class="font-semibold text-teal-600 '
-            f'hover:underline">@{safe_name}@{safe_host}</a>'
-        )
-        processed_text = re.sub(pattern, lambda m, r=replacement_html: r,
-                                processed_text, flags=re.IGNORECASE)
-
-    # Pass 2: Handle simple mentions (@DisplayName) for REMOTE users.
-    for user in sorted_remote:
-        safe_name = str(escape(user['display_name']))
-        pattern = r'(?<!\S)@' + re.escape(safe_name) + r'(?!@)\b'
-        # Corrected: Point to the local endpoint.
-        profile_url = url_for('main.user_profile', puid=user['puid'])
-        replacement_html = (
-            f'<a href="{escape(profile_url)}" class="font-semibold text-teal-600 '
-            f'hover:underline">@{safe_name}</a>'
-        )
-        processed_text = re.sub(pattern, lambda m, r=replacement_html: r,
-                                processed_text, flags=re.IGNORECASE)
-
-    # Pass 3: Handle simple mentions (@DisplayName) for LOCAL users.
-    for user in sorted_local:
-        safe_name = str(escape(user['display_name']))
-        pattern = r'(?<!\S)@' + re.escape(safe_name) + r'(?!@)\b'
-        # BUG FIX: Check user_type to generate the correct profile URL for public pages.
-        if user['user_type'] == 'public_page':
-            profile_url = url_for('main.public_page_profile', puid=user['puid'])
-        else:
-            profile_url = url_for('main.user_profile', puid=user['puid'])
-        replacement_html = (
-            f'<a href="{escape(profile_url)}" class="font-semibold text-blue-600 '
-            f'hover:underline">@{safe_name}</a>'
-        )
-        processed_text = re.sub(pattern, lambda m, r=replacement_html: r,
-                                processed_text, flags=re.IGNORECASE)
+        processed_text = pattern.sub(replace, processed_text)
 
     return Markup(processed_text)
 

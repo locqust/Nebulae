@@ -801,10 +801,60 @@ def get_posts_for_feed(current_user_id=None, current_user_is_admin=False, filter
             params.extend(member_of_group_ids)
 
     where_clause = ' OR '.join(f"({c})" for c in conditions)
+
+    # -----------------------------------------------------------------------
+    # PAGINATION FIX
+    #
+    # These exclusions used to be applied in Python *after* the LIMIT, which
+    # meant asking for 20 posts and getting back however many survived the
+    # filter. Snooze one chatty friend and pages arrive with 4, 7, 11 posts,
+    # and infinite scroll cannot tell a short page from the end of the feed.
+    #
+    # Doing them in SQL means LIMIT 20 returns twenty posts.
+    # -----------------------------------------------------------------------
+    exclusions = []
+    exclusion_params = []
+
+    if current_user_id:
+        # Posts this user has explicitly hidden. This also removes an N+1:
+        # is_post_hidden_for_user() used to run one query per post in the loop.
+        exclusions.append(
+            "p.id NOT IN (SELECT content_id FROM hidden_content "
+            "WHERE user_id = ? AND content_type = 'post')"
+        )
+        exclusion_params.append(current_user_id)
+
+    if not current_user_is_admin and (snoozed_friend_ids or viewer_blocked_by_map):
+        # Both sets are keyed by user id; the posts table stores author_puid.
+        wanted_ids = list(snoozed_friend_ids) + list(viewer_blocked_by_map.keys())
+        id_ph = ','.join('?' * len(wanted_ids))
+        cursor.execute(f"SELECT id, puid FROM users WHERE id IN ({id_ph})", wanted_ids)
+        id_to_puid = {row['id']: row['puid'] for row in cursor.fetchall()}
+
+        snoozed_puids = [id_to_puid[i] for i in snoozed_friend_ids if i in id_to_puid]
+        if snoozed_puids:
+            ph = ','.join('?' * len(snoozed_puids))
+            exclusions.append(f"p.author_puid NOT IN ({ph})")
+            exclusion_params.extend(snoozed_puids)
+
+        # Someone who blocked this viewer hides only posts made AFTER the
+        # block; anything from before it stays visible, as it did previously.
+        for blocker_id, blocked_at in viewer_blocked_by_map.items():
+            blocker_puid = id_to_puid.get(blocker_id)
+            if not blocker_puid:
+                continue
+            exclusions.append("NOT (p.author_puid = ? AND p.timestamp > ?)")
+            exclusion_params.extend([blocker_puid, blocked_at.strftime('%Y-%m-%d %H:%M:%S')])
+
+    full_where = f"({where_clause})"
+    if exclusions:
+        full_where += ' AND ' + ' AND '.join(exclusions)
+        params.extend(exclusion_params)
+
     # Calculate offset for pagination
     offset = (page - 1) * limit
 
-    query = f"SELECT p.cuid FROM posts p WHERE {where_clause} ORDER BY p.timestamp DESC LIMIT ? OFFSET ?"
+    query = f"SELECT p.cuid FROM posts p WHERE {full_where} ORDER BY p.timestamp DESC LIMIT ? OFFSET ?"
     params.extend([limit, offset])
 
     #print(f"DEBUG get_posts_for_feed: Final query: {query}")
@@ -822,9 +872,7 @@ def get_posts_for_feed(current_user_id=None, current_user_is_admin=False, filter
         if not post:
             continue
 
-        # NEW: Skip hidden posts
-        if current_user_id and is_post_hidden_for_user(current_user_id, post['id']):
-            continue
+        # Hidden posts are now excluded in SQL above (was an N+1 query here).
 
         author_puid = post['author'].get('puid')
         author_user = get_user_by_puid(author_puid)
