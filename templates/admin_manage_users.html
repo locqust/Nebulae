@@ -99,12 +99,12 @@
                         </td>
                         <td class="py-3 px-3 text-center relative">
                             <div class="inline-block text-left">
-                                <button type="button" class="inline-flex justify-center rounded-md px-2 py-1 text-sm font-medium text-gray-700 hover:bg-gray-100 focus:outline-none" id="options-menu-{{ user.puid }}" aria-haspopup="true" aria-expanded="true" onclick="toggleDropdown(event, 'dropdown-menu-{{ user.puid }}')">
+                                <button type="button" class="inline-flex justify-center rounded-md px-2 py-1 text-sm font-medium text-gray-700 hover:bg-gray-100 focus:outline-none" id="options-menu-{{ user.username }}" aria-haspopup="true" aria-expanded="true" onclick="toggleDropdown(event, 'dropdown-menu-{{ user.username }}')">
                                     <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                         <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
                                     </svg>
                                 </button>
-                                <div class="dropdown-menu fixed mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50" role="menu" aria-orientation="vertical" aria-labelledby="options-menu-{{ user.puid }}" id="dropdown-menu-{{ user.puid }}" style="display: none;">
+                                <div class="dropdown-menu fixed mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50" role="menu" aria-orientation="vertical" aria-labelledby="options-menu-{{ user.username }}" id="dropdown-menu-{{ user.username }}" style="display: none;">
                                     <div class="py-1" role="none">
                                         <button type="button" 
                                         class="text-gray-700 block w-full text-left px-4 py-2 text-sm hover:bg-gray-100" 
@@ -141,8 +141,8 @@
                                         </button>
                                         
                                         <form action="{{ url_for('admin.admin_delete_user', username=user.username) }}" method="POST" onsubmit="event.preventDefault();">
-                                            <button type="button" onclick="showConfirmationModal('Are you sure you want to delete this user? This action cannot be undone.', () => this.closest('form').submit())" class="text-red-600 block px-4 py-2 text-sm hover:bg-red-100 w-full text-left" role="menuitem">
-                                                Delete User
+                                            <button type="button" onclick="showConfirmationModal('Remove this account? Their login, email, profile picture and personal settings are permanently deleted. Their posts, comments, group history and any events they created are kept and will show as Deleted User, so shared conversations stay readable. If they were the only admin of a group, you will be made admin of it. This cannot be undone.', () => this.closest('form').submit())" class="text-red-600 block px-4 py-2 text-sm hover:bg-red-100 w-full text-left" role="menuitem">
+                                                Remove User
                                             </button>
                                         </form>
                                     </div>

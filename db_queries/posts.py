@@ -831,6 +831,13 @@ def get_posts_for_feed(current_user_id=None, current_user_is_admin=False, filter
     exclusions = []
     exclusion_params = []
 
+    # BUGFIX: get_post_by_cuid() INNER JOINs users on author_puid, so a post
+    # whose author has been deleted returns None and is silently dropped from
+    # the loop below - after it has already consumed a slot in the LIMIT. That
+    # made pages short again for a reason the exclusions could not see.
+    # Excluding orphans here keeps a page of 20 an actual page of 20.
+    exclusions.append("EXISTS (SELECT 1 FROM users a WHERE a.puid = p.author_puid)")
+
     if current_user_id:
         # Posts this user has explicitly hidden. This also removes an N+1:
         # is_post_hidden_for_user() used to run one query per post in the loop.
@@ -944,6 +951,11 @@ def get_posts_for_group(group_puid, viewer_user_id, is_member, viewer_is_admin, 
     # this group on purpose, and snooze is a feed-noise tool, not a safety one.
     exclusions = []
     exclusion_params = []
+
+    # Skip posts whose author no longer exists - get_post_by_cuid() INNER JOINs
+    # users on author_puid, so it returns None for them and they get dropped
+    # from the loop below, after already consuming a slot in the LIMIT.
+    exclusions.append("EXISTS (SELECT 1 FROM users a WHERE a.puid = posts.author_puid)")
 
     # DELIBERATE: group and node admins are exempt from block filtering here.
     # Moderating a group means being able to see everything posted in it,

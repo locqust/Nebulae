@@ -390,10 +390,13 @@ def admin_delete_user(username):
 
     user_type = user_to_delete.get('user_type')
 
+    display_name = user_to_delete.get('display_name') or username
+
     if delete_user(username):
-        flash(f'Successfully deleted "{username}"!', 'success')
+        flash(f'"{display_name}" has been removed. Their posts, comments and '
+              f'group history remain and now show as "Deleted User".', 'success')
     else:
-        flash(f'Failed to delete "{username}".', 'danger')
+        flash(f'Failed to remove "{username}".', 'danger')
     
     if user_type == 'public_page':
         return redirect(url_for('admin.admin_manage_public_pages'))

@@ -1,6 +1,10 @@
 # db_queries/users.py
 # Contains functions for managing users.
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 import uuid
 import sqlite3
 from datetime import datetime # Import datetime
@@ -250,13 +254,149 @@ def update_user_cover_picture_path(puid, cover_picture_path):
         db.rollback()
         return False
 
+# Shown in place of a deleted account's name, everywhere their content appears.
+DELETED_USER_DISPLAY_NAME = 'Deleted User'
+
+
 def delete_user(username):
-    """Deletes a user from the database."""
+    """
+    Removes a person from the node without destroying what they contributed.
+
+    Nebulae deliberately does NOT cascade-delete a user's content. Posts,
+    comments, group history and events they created stay in place and render
+    as "Deleted User", because a group or page can remain useful to everyone
+    else long after one member leaves. A group admin can still remove any
+    individual post if it becomes a problem.
+
+    What this DOES remove is everything personally identifying: email address,
+    password, profile and cover pictures, media paths, two-factor secrets,
+    active sessions, push subscriptions, saved settings, profile fields and
+    shortcuts. The row itself is kept so that every foreign key referencing
+    this person stays intact - the alternative, rewriting content to point at
+    a shared tombstone account, risks corrupting exactly the history we are
+    trying to preserve.
+
+    Setting user_type to 'deleted' also drops them out of mention lookups,
+    discovery and search automatically, since those filter on specific types.
+
+    Returns True if a user was anonymised.
+    """
     db = get_db()
     cursor = db.cursor()
-    cursor.execute("DELETE FROM users WHERE username = ?", (username,))
-    db.commit()
-    return cursor.rowcount > 0
+
+    cursor.execute("SELECT id, puid, user_type FROM users WHERE username = ?", (username,))
+    row = cursor.fetchone()
+    if not row:
+        return False
+
+    user_id = row['id']
+
+    try:
+        # A username must stay unique, so replace rather than blank it.
+        placeholder_username = f"deleted-{row['puid']}"
+
+        cursor.execute("""
+            UPDATE users SET
+                username = ?,
+                password = '',
+                email = NULL,
+                display_name = ?,
+                media_path = NULL,
+                uploads_path = NULL,
+                profile_picture_path = NULL,
+                original_profile_picture_path = NULL,
+                cover_picture_path = NULL,
+                user_type = 'deleted',
+                password_must_change = 0,
+                requires_parental_approval = 0
+            WHERE id = ?
+        """, (placeholder_username, DELETED_USER_DISPLAY_NAME, user_id))
+
+        # Personal data with no value to anyone else.
+        for table in ('user_sessions', 'push_subscriptions', 'user_2fa',
+                      'user_settings', 'user_profile_info', 'user_shortcuts',
+                      'hidden_content', 'hidden_items', 'pairing_tokens'):
+            try:
+                cursor.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
+            except sqlite3.OperationalError:
+                # Table uses a different column name, or does not exist yet.
+                pass
+
+        # Relationships are two-sided; leaving them would show a deleted
+        # account in other people's friends lists.
+        cursor.execute("DELETE FROM friends WHERE user_id_1 = ? OR user_id_2 = ?", (user_id, user_id))
+        cursor.execute("DELETE FROM friend_requests WHERE sender_id = ? OR receiver_id = ?", (user_id, user_id))
+        cursor.execute("DELETE FROM friend_relationships WHERE user_id = ? OR friend_id = ?", (user_id, user_id))
+        cursor.execute("DELETE FROM followers WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM family_relationships WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM parental_controls WHERE child_user_id = ? OR parent_user_id = ?", (user_id, user_id))
+        cursor.execute("DELETE FROM parental_approval_queue WHERE child_user_id = ?", (user_id,))
+
+        # Notifications aimed at them, and notifications about their actions.
+        cursor.execute("DELETE FROM notifications WHERE user_id = ? OR actor_id = ?", (user_id, user_id))
+
+        # Hand over any group they were the sole admin of, so it does not
+        # become unmanageable. The node admin can reassign it afterwards.
+        reassigned = _reassign_orphaned_group_admin(cursor, user_id)
+
+        # Their group membership goes; their posts in the group stay.
+        cursor.execute("DELETE FROM group_members WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM group_join_requests WHERE user_id = ?", (user_id,))
+
+        db.commit()
+        if reassigned:
+            logger.info("delete_user: reassigned %d group(s) to the admin account "
+                        "after anonymising %s", reassigned, username)
+        return True
+    except Exception as e:
+        db.rollback()
+        logger.error("Error anonymising user %s: %s", username, e)
+        return False
+
+
+def _reassign_orphaned_group_admin(cursor, user_id):
+    """
+    Promotes the node admin to group admin for any group this user was the
+    only admin of. Returns how many groups were reassigned.
+
+    Events are deliberately left alone: an event keeps its original creator
+    and simply shows as created by "Deleted User", which is almost always a
+    past event nobody needs to manage.
+    """
+    cursor.execute("SELECT id FROM users WHERE user_type = 'admin' AND hostname IS NULL LIMIT 1")
+    admin_row = cursor.fetchone()
+    if not admin_row:
+        return 0
+    admin_id = admin_row['id']
+    if admin_id == user_id:
+        return 0
+
+    cursor.execute("""
+        SELECT group_id FROM group_members
+        WHERE user_id = ? AND role = 'admin'
+    """, (user_id,))
+    group_ids = [r['group_id'] for r in cursor.fetchall()]
+
+    reassigned = 0
+    for group_id in group_ids:
+        cursor.execute("""
+            SELECT COUNT(*) AS n FROM group_members
+            WHERE group_id = ? AND role = 'admin' AND user_id != ?
+        """, (group_id, user_id))
+        if cursor.fetchone()['n'] > 0:
+            continue  # someone else can still administer it
+
+        cursor.execute("SELECT id, role FROM group_members WHERE group_id = ? AND user_id = ?",
+                       (group_id, admin_id))
+        existing = cursor.fetchone()
+        if existing:
+            cursor.execute("UPDATE group_members SET role = 'admin' WHERE id = ?", (existing['id'],))
+        else:
+            cursor.execute("INSERT INTO group_members (group_id, user_id, role) VALUES (?, ?, 'admin')",
+                           (group_id, admin_id))
+        reassigned += 1
+
+    return reassigned
 
 def get_all_users_with_media_paths():
     """

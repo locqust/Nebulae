@@ -42,7 +42,7 @@ from routes.parental import parental_bp
 from routes.shortcuts import shortcuts_bp
 
 # Application version
-__version__ = "0.9.6.5-beta"
+__version__ = "0.9.6.6-beta"
 
 # Configure logging before anything else emits a line, so that LOG_LEVEL
 # actually governs the whole startup sequence.
