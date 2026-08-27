@@ -421,6 +421,13 @@ def inject_user_data_functions():
             # If a token can't be generated, return the base URL without it.
             return base_url
         else:
+            # Removed accounts have no profile to visit, so don't offer a link.
+            try:
+                if user_object['user_type'] == 'deleted':
+                    return "#"
+            except (KeyError, TypeError):
+                pass
+
             # For local users, just generate a standard local URL.
             return url_for('main.user_profile', puid=puid)
 

@@ -44,6 +44,19 @@
         </div>
 
         <div class="overflow-x-auto -mx-8 px-8">
+            {% if deleted_count %}
+            <div class="flex justify-end mb-3 text-sm">
+                {% if show_deleted %}
+                    <a href="{{ url_for('admin.admin_manage_users') }}" class="text-blue-600 hover:underline">
+                        Hide removed accounts
+                    </a>
+                {% else %}
+                    <a href="{{ url_for('admin.admin_manage_users', show_deleted=1) }}" class="text-gray-500 hover:text-blue-600 hover:underline">
+                        Show {{ deleted_count }} removed account{{ '' if deleted_count == 1 else 's' }}
+                    </a>
+                {% endif %}
+            </div>
+            {% endif %}
             <table class="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                 <thead>
                     <tr class="bg-gray-100 text-gray-700 uppercase text-sm leading-normal">
@@ -60,9 +73,15 @@
                     <tr class="border-b border-gray-200 hover:bg-gray-50">
                         <td class="py-3 px-4 text-left">
                             <div class="flex items-center">
-                                <a href="{{ url_for('main.user_profile', puid=user.puid) }}" class="font-medium text-blue-600 hover:text-blue-800 hover:underline truncate max-w-[200px]">
-                                    {{ user.username }}
-                                </a>
+                                {% if user.user_type == 'deleted' %}
+                                    {# Removed account - nothing to view, so no link. #}
+                                    <span class="font-medium text-gray-500 italic truncate max-w-[200px]">{{ user.display_name }}</span>
+                                    <span class="ml-2 bg-gray-200 text-gray-600 py-1 px-2 rounded-full text-xs whitespace-nowrap">Removed</span>
+                                {% else %}
+                                    <a href="{{ url_for('main.user_profile', puid=user.puid) }}" class="font-medium text-blue-600 hover:text-blue-800 hover:underline truncate max-w-[200px]">
+                                        {{ user.username }}
+                                    </a>
+                                {% endif %}
                             </div>
                         </td>
                         <td class="py-3 px-4 text-left hidden md:table-cell">

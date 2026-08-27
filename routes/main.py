@@ -1943,6 +1943,15 @@ def user_profile(puid):
         return redirect(url_for('main.user_profile', puid=puid))
 
     profile_user = get_user_by_puid(puid)
+
+    # A removed account keeps its row so its posts and comments stay readable,
+    # but there is no profile left to show. This guard is the single place that
+    # covers every route in: direct links, bookmarks, notification links,
+    # @mentions in old posts, and federated viewer links.
+    if profile_user and profile_user.get('user_type') == 'deleted':
+        flash('That account has been removed.', 'info')
+        return redirect(url_for('main.index'))
+
     if not profile_user:
         flash('User not found.', 'danger')
         return redirect(url_for('main.index'))

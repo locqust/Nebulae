@@ -198,9 +198,13 @@ def admin_post_local():
 @admin_bp.route('/admin/manage_users', methods=['GET'])
 def admin_manage_users():
     """Admin page to view and manage users."""
-    from db_queries.users import get_all_local_users
-    users = get_all_local_users()
-    return render_template('admin_manage_users.html', users=users)
+    from db_queries.users import get_all_local_users, count_deleted_local_users
+    show_deleted = request.args.get('show_deleted') == '1'
+    users = get_all_local_users(include_deleted=show_deleted)
+    return render_template('admin_manage_users.html',
+                           users=users,
+                           show_deleted=show_deleted,
+                           deleted_count=count_deleted_local_users())
 
 @admin_bp.route('/admin/add_user', methods=['GET', 'POST'])
 def admin_add_user():

@@ -411,17 +411,34 @@ def get_all_users_with_media_paths():
     rows = cursor.fetchall()
     return [dict(row) for row in rows]
 
-def get_all_local_users():
+def get_all_local_users(include_deleted=False):
     """
     Retrieves all local users (user and admin types) for management purposes.
     It specifically checks for users where hostname is NULL.
+
+    Removed accounts are kept in the table so their posts and comments stay
+    readable, but they are noise on an admin screen, so they are hidden unless
+    include_deleted is True.
     """
     db = get_db()
     cursor = db.cursor()
-    query = f"SELECT {USER_COLUMNS} FROM users WHERE hostname IS NULL ORDER BY username"
+    if include_deleted:
+        query = f"SELECT {USER_COLUMNS} FROM users WHERE hostname IS NULL ORDER BY username"
+    else:
+        query = (f"SELECT {USER_COLUMNS} FROM users "
+                 f"WHERE hostname IS NULL AND user_type != 'deleted' ORDER BY username")
     cursor.execute(query)
     rows = cursor.fetchall()
     return [dict(row) for row in rows]
+
+
+def count_deleted_local_users():
+    """How many removed accounts are hidden from the admin user list."""
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("SELECT COUNT(*) AS n FROM users WHERE hostname IS NULL AND user_type = 'deleted'")
+    row = cursor.fetchone()
+    return row['n'] if row else 0
 
 # --- NEW FUNCTION for Searching Discoverable Users ---
 def search_discoverable_local_users(search_term, current_user_id):
