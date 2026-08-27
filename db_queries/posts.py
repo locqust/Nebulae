@@ -1,6 +1,10 @@
 # db_queries/posts.py
 # Contains functions for managing posts and the main feed.
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 import uuid
 from datetime import datetime
 from flask import g, current_app
@@ -874,12 +878,12 @@ def get_posts_for_feed(current_user_id=None, current_user_is_admin=False, filter
     query = f"SELECT p.cuid FROM posts p WHERE {full_where} ORDER BY p.timestamp DESC LIMIT ? OFFSET ?"
     params.extend([limit, offset])
 
-    #print(f"DEBUG get_posts_for_feed: Final query: {query}")
-    #print(f"DEBUG get_posts_for_feed: Params: {params}")
+    logger.debug("get_posts_for_feed: query = %s", query)
+    logger.debug("get_posts_for_feed: params = %r", params)
 
     cursor.execute(query, params)
     post_cuids = [row['cuid'] for row in cursor.fetchall()]
-    #print(f"DEBUG get_posts_for_feed: Found {len(post_cuids)} posts total")
+    logger.debug("get_posts_for_feed: SQL returned %d cuids", len(post_cuids))
 
     final_posts = []
     for cuid in post_cuids:
@@ -912,6 +916,7 @@ def get_posts_for_feed(current_user_id=None, current_user_is_admin=False, filter
 
         final_posts.append(post)
 
+    logger.debug("get_posts_for_feed: %d cuids -> %d rendered", len(post_cuids), len(final_posts))
     return final_posts
 
 def get_posts_for_group(group_puid, viewer_user_id, is_member, viewer_is_admin, page=1, limit=20):
