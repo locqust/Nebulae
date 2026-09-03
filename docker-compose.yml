@@ -27,8 +27,14 @@ services:
       - SECRET_KEY=CHANGE_ME_GENERATE_A_SECRET_KEY
       # REQUIRED: Your public hostname/IP (e.g., nebulae.example.com)
       - NODE_HOSTNAME=CHANGE_ME_TO_YOUR_HOSTNAME
-      # Optional: Set to True only for testing without HTTPS
+       # Optional: Set to True only for testing without HTTPS
       - FEDERATION_INSECURE_MODE=False
+      # Accessing the node over plain HTTP (e.g. http://192.168.0.82:5000)?
+      # Session cookies are marked Secure by default and browsers silently
+      # discard those on non-HTTPS connections - login will appear to fail
+      # with no error message at all. Uncomment for LAN-only HTTP access, and
+      # remove it once HTTPS is in front of the node.
+      # - SESSION_COOKIE_SECURE=False
       # Optional: Set to production
       - FLASK_ENV=production
       - LOG_LEVEL=INFO
