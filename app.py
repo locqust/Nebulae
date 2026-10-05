@@ -16,6 +16,7 @@ import datetime
 import re
 import traceback
 import sys
+import hmac
 from itsdangerous import URLSafeTimedSerializer
 from markupsafe import Markup, escape
 from flask_compress import Compress
@@ -26,7 +27,7 @@ from routes.conversations import conversations_bp
 # Import database functions and utilities
 from db import get_db, close_db, init_db
 # MODIFICATION: Import session management functions
-from db_queries.users import get_user_id_by_username, get_user_by_id, get_user_by_username, get_session_by_id, update_session_last_seen
+from db_queries.users import get_user_id_by_username, get_user_by_id, get_user_by_username, get_session_by_id, update_session_last_seen, update_user_role
 from db_queries.notifications import get_unread_notification_count, check_and_create_birthday_notifications
 from db_queries.federation import get_node_by_hostname, get_node_nu_id
 # NEW: Import settings queries
@@ -40,6 +41,7 @@ from utils.text_processing import linkify_everyone_mention # XSS FIX: replaces t
 from routes.push_notifications import push_notifications_bp
 from routes.parental import parental_bp
 from routes.shortcuts import shortcuts_bp
+from utils.sso import init_sso, is_trusted_proxy, login_or_provision_sso_user, parse_groups
 
 # Application version
 __version__ = "0.9.6.6-beta"
@@ -159,6 +161,7 @@ app.teardown_appcontext(close_db)
 # Call init_db() when the application starts
 with app.app_context():
     init_db(app) # Pass app to init_db for app.open_resource
+    init_sso(app) # Initialize Single Sign-On (OIDC & Proxy Auth)
 
 # Start the background scheduler for periodic tasks
 from utils.scheduler import scheduler
@@ -299,6 +302,49 @@ def before_request_tasks():
     It's used here to trigger daily tasks, validate sessions,
     and load request-scoped context.
     """
+    # 0. Proxy Authentication (ForwardAuth) if enabled
+    if current_app.config.get('PROXY_AUTH_ENABLED'):
+        user_header = current_app.config.get('PROXY_AUTH_USER_HEADER', 'Remote-User')
+        remote_user = request.headers.get(user_header)
+        if remote_user:
+            peer_ip = request.environ.get('RAW_REMOTE_ADDR', request.remote_addr)
+            trusted_proxies = current_app.config.get('PROXY_AUTH_TRUSTED_PROXIES')
+            if is_trusted_proxy(peer_ip, trusted_proxies):
+                secret_hdr = current_app.config.get('PROXY_AUTH_SECRET_HEADER')
+                secret_val = current_app.config.get('PROXY_AUTH_SECRET_VALUE')
+                secret_ok = True
+                if secret_hdr:
+                    sent_val = request.headers.get(secret_hdr, '')
+                    secret_ok = bool(secret_val and hmac.compare_digest(sent_val, secret_val))
+                if secret_ok:
+                    curr_user = session.get('username')
+                    groups_hdr = current_app.config.get('PROXY_AUTH_GROUPS_HEADER', 'Remote-Groups')
+                    admin_grp = current_app.config.get('PROXY_AUTH_ADMIN_GROUP', 'admins')
+                    if curr_user != remote_user or 'session_id' not in session:
+                        email_hdr = current_app.config.get('PROXY_AUTH_EMAIL_HEADER', 'Remote-Email')
+                        name_hdr = current_app.config.get('PROXY_AUTH_NAME_HEADER', 'Remote-Name')
+                        try:
+                            login_or_provision_sso_user(
+                                username=remote_user,
+                                email=request.headers.get(email_hdr),
+                                display_name=request.headers.get(name_hdr),
+                                groups=request.headers.get(groups_hdr),
+                                auth_provider='proxy',
+                                auth_sub=f"proxy:{remote_user}",
+                                admin_group=admin_grp
+                            )
+                        except Exception as e:
+                            logger.error(f"Proxy authentication failed for {remote_user}: {e}")
+                    else:
+                        # Keep admin status synchronized with proxy groups on subsequent requests
+                        user_groups = parse_groups(request.headers.get(groups_hdr))
+                        is_admin = admin_grp.lower() in user_groups
+                        if session.get('is_admin') != is_admin:
+                            user = get_user_by_username(curr_user)
+                            if user and user.get('auth_provider') == 'proxy':
+                                update_user_role(user['id'], 'admin' if is_admin else 'user')
+                                session['is_admin'] = is_admin
+
     # 1. Validate the current user's session
     if 'session_id' in session:
         session_valid = get_session_by_id(session['session_id'])
@@ -351,13 +397,16 @@ def inject_user_data_functions():
     
     unread_messages_count = 0  # ← add this initialisation next to unread_notifications = 0
 
+    current_user = None
+
     if session.get('is_federated_viewer'):
         federated_settings = session.get('federated_viewer_settings')
         if federated_settings:
             user_settings.update(federated_settings)
     elif 'username' in session:
-        user_id = get_user_id_by_username(session['username'])
-        if user_id:
+        current_user = get_user_by_username(session['username'])
+        if current_user:
+            user_id = current_user['id']
             unread_notifications = get_unread_notification_count(user_id)
             user_settings = get_user_settings(user_id)
             from db_queries.conversations import get_unread_conversation_count_for_user
@@ -636,6 +685,7 @@ def inject_user_data_functions():
         federated_event_picture_url=federated_event_picture_url,
         # NEW: Make user settings available in all templates
         user_settings=user_settings,
+        current_user=current_user,
         is_parent=is_parent,
         pending_approvals_count=pending_approvals_count
     )

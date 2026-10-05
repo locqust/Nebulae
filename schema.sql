@@ -15,9 +15,12 @@ CREATE TABLE IF NOT EXISTS users (
     password_must_change BOOLEAN DEFAULT FALSE, -- Force password change on next login
     requires_parental_approval BOOLEAN DEFAULT FALSE,
     hostname TEXT, -- NULL for local users, stores the origin hostname for remote users.
+    auth_provider TEXT DEFAULT 'local', -- 'local', 'oidc', 'proxy'
+    auth_sub TEXT, -- SSO subject identifier (e.g., Authelia user sub)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(username, hostname) -- A user from a specific node is unique.
 );
+
 
 -- NEW: Table for user sessions
 CREATE TABLE IF NOT EXISTS user_sessions (
