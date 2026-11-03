@@ -962,6 +962,10 @@ html.dark .privacy-group { background-color: #042f2e; color: #5eead4; }
     grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
     gap: 8px;
 }
+/* 4+ items: lock to 4 columns so "Show more" adds rows instead of shrinking tiles */
+.media-grid:has(> .post-media-item-link:nth-child(4)) {
+    grid-template-columns: repeat(4, 1fr);
+}
 .post-media-item {
     position: relative;
     width: 100%;
@@ -978,6 +982,20 @@ html.dark .privacy-group { background-color: #042f2e; color: #5eead4; }
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+/* Single media item: drop the square and show it at its natural aspect ratio */
+.media-grid > .post-media-item-link:only-child .post-media-item {
+    padding-bottom: 0;
+}
+.media-grid > .post-media-item-link:only-child .post-media-item img,
+.media-grid > .post-media-item-link:only-child .post-media-item video {
+    position: static;
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 75vh;
+    object-fit: contain;
 }
 .post-media-item .play-icon {
     position: absolute;
